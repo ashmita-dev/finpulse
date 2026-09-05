@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   Ban,
@@ -5,11 +6,8 @@ import {
   ShieldAlert,
 } from "lucide-react";
 
-import type { Transaction } from "../types/transaction";
-
-interface RiskProps {
-  transactions: Transaction[];
-}
+import { getUserRiskTransactions } from "../services/api";
+import type { TransactionWithRisk } from "../types/transaction";
 
 function formatCurrency(amount: string, currency: string) {
   return new Intl.NumberFormat("en-IN", {
@@ -19,19 +17,63 @@ function formatCurrency(amount: string, currency: string) {
   }).format(Number(amount));
 }
 
-function Risk({ transactions }: RiskProps) {
-  const highRisk = transactions.filter(
-    (transaction) => Number(transaction.amount) >= 50000,
+function Risk() {
+  const [transactions, setTransactions] = useState<
+    TransactionWithRisk[]
+  >([]);
+
+  const [isLoading, setIsLoading] = useState(true);
+
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadRiskData() {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        const data = await getUserRiskTransactions(1);
+
+        setTransactions(data);
+      } catch (requestError) {
+        setError(
+          requestError instanceof Error
+            ? requestError.message
+            : "Unable to load risk data.",
+        );
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    loadRiskData();
+  }, []);
+
+  const highRisk = useMemo(
+    () =>
+      transactions.filter(
+        (transaction) =>
+          transaction.risk.risk_level === "HIGH",
+      ),
+    [transactions],
   );
 
-  const review = transactions.filter(
-    (transaction) =>
-      Number(transaction.amount) >= 10000 &&
-      Number(transaction.amount) < 50000,
+  const review = useMemo(
+    () =>
+      transactions.filter(
+        (transaction) =>
+          transaction.risk.risk_level === "MEDIUM",
+      ),
+    [transactions],
   );
 
-  const approved = transactions.filter(
-    (transaction) => Number(transaction.amount) < 10000,
+  const approved = useMemo(
+    () =>
+      transactions.filter(
+        (transaction) =>
+          transaction.risk.risk_level === "LOW",
+      ),
+    [transactions],
   );
 
   return (
@@ -46,6 +88,13 @@ function Risk({ transactions }: RiskProps) {
         </div>
       </div>
 
+      {error && (
+        <div className="error-banner">
+          <ShieldAlert size={16} />
+          <span>{error}</span>
+        </div>
+      )}
+
       <section className="metrics-grid">
         <article className="metric-card">
           <div className="metric-header">
@@ -53,7 +102,9 @@ function Risk({ transactions }: RiskProps) {
             <ShieldAlert size={19} />
           </div>
 
-          <div className="metric-value">{highRisk.length}</div>
+          <div className="metric-value">
+            {isLoading ? "—" : highRisk.length}
+          </div>
 
           <div className="metric-footer warning">
             <span>Immediate attention</span>
@@ -66,7 +117,9 @@ function Risk({ transactions }: RiskProps) {
             <AlertTriangle size={19} />
           </div>
 
-          <div className="metric-value">{review.length}</div>
+          <div className="metric-value">
+            {isLoading ? "—" : review.length}
+          </div>
 
           <div className="metric-footer warning">
             <span>Manual review signals</span>
@@ -79,7 +132,9 @@ function Risk({ transactions }: RiskProps) {
             <CheckCircle2 size={19} />
           </div>
 
-          <div className="metric-value">{approved.length}</div>
+          <div className="metric-value">
+            {isLoading ? "—" : approved.length}
+          </div>
 
           <div className="metric-footer positive">
             <span>Within normal threshold</span>
@@ -93,9 +148,11 @@ function Risk({ transactions }: RiskProps) {
           </div>
 
           <div className="metric-value">
-            {transactions.length === 0
-              ? "0%"
-              : "100%"}
+            {isLoading
+              ? "—"
+              : transactions.length === 0
+                ? "0%"
+                : "100%"}
           </div>
 
           <div className="metric-footer">
@@ -107,80 +164,184 @@ function Risk({ transactions }: RiskProps) {
       <section className="panel activity-panel">
         <div className="panel-header">
           <div>
-            <span className="panel-kicker">Risk signals</span>
-            <h3>Transactions requiring attention</h3>
+            <span className="panel-kicker">
+              Risk engine
+            </span>
+            <h3>Transaction risk assessments</h3>
+          </div>
+
+          <div className="stream-status">
+            <span />
+            Python risk engine
           </div>
         </div>
 
         <div className="activity-table">
           <div className="table-row table-heading">
             <span>Transaction</span>
-            <span>Signal</span>
-            <span>Amount</span>
+            <span>Risk score</span>
             <span>Decision</span>
-            <span>Severity</span>
+            <span>Level</span>
+            <span>Signals</span>
           </div>
 
-          {[...highRisk, ...review].map((transaction) => {
-            const isHighRisk =
-              Number(transaction.amount) >= 50000;
-
-            return (
-              <div className="table-row" key={transaction.id}>
-                <div className="transaction-cell">
-                  <div className="merchant-icon">
-                    {isHighRisk ? (
-                      <Ban size={14} />
-                    ) : (
-                      <AlertTriangle size={14} />
-                    )}
-                  </div>
-
-                  <div>
-                    <strong>{transaction.merchant}</strong>
-                    <span>
-                      Transaction #{transaction.id}
-                    </span>
-                  </div>
-                </div>
-
-                <span>
-                  {isHighRisk
-                    ? "Very high amount"
-                    : "High amount"}
-                </span>
-
-                <strong>
-                  {formatCurrency(
-                    transaction.amount,
-                    transaction.currency,
-                  )}
-                </strong>
-
-                <span>
-                  {isHighRisk ? "BLOCK" : "REVIEW"}
-                </span>
-
-                <span
-                  className={`status-pill ${
-                    isHighRisk
-                      ? "review"
-                      : "approved"
-                  }`}
-                >
-                  {isHighRisk ? "HIGH" : "MEDIUM"}
-                </span>
-              </div>
-            );
-          })}
-
-          {highRisk.length === 0 && review.length === 0 && (
+          {isLoading ? (
             <div className="empty-state">
-              No transactions currently require attention.
+              Evaluating transactions…
             </div>
+          ) : transactions.length === 0 ? (
+            <div className="empty-state">
+              No transactions available for risk analysis.
+            </div>
+          ) : (
+            transactions.map((transaction) => {
+              const level =
+                transaction.risk.risk_level;
+
+              const isHigh = level === "HIGH";
+              const isMedium = level === "MEDIUM";
+
+              return (
+                <div
+                  className="table-row"
+                  key={transaction.id}
+                >
+                  <div className="transaction-cell">
+                    <div className="merchant-icon">
+                      {isHigh ? (
+                        <Ban size={14} />
+                      ) : isMedium ? (
+                        <AlertTriangle size={14} />
+                      ) : (
+                        <CheckCircle2 size={14} />
+                      )}
+                    </div>
+
+                    <div>
+                      <strong>
+                        {transaction.merchant}
+                      </strong>
+
+                      <span>
+                        {formatCurrency(
+                          transaction.amount,
+                          transaction.currency,
+                        )}
+                      </span>
+                    </div>
+                  </div>
+
+                  <strong>
+                    {transaction.risk.risk_score}
+                  </strong>
+
+                  <span>
+                    {transaction.risk.decision}
+                  </span>
+
+                  <span
+                    className={`status-pill ${
+                      isHigh || isMedium
+                        ? "review"
+                        : "approved"
+                    }`}
+                  >
+                    {level}
+                  </span>
+
+                  <span>
+                    {transaction.risk.reasons.length}
+                  </span>
+                </div>
+              );
+            })
           )}
         </div>
       </section>
+
+      {transactions.length > 0 && (
+        <section className="panel activity-panel">
+          <div className="panel-header">
+            <div>
+              <span className="panel-kicker">
+                Explainability
+              </span>
+
+              <h3>Risk signals</h3>
+            </div>
+          </div>
+
+          <div style={{ padding: "20px 21px 24px" }}>
+            {transactions
+              .filter(
+                (transaction) =>
+                  transaction.risk.reasons.length > 0,
+              )
+              .slice(0, 6)
+              .map((transaction) => (
+                <div
+                  key={transaction.id}
+                  style={{
+                    padding: "16px 0",
+                    borderTop:
+                      "1px solid #eef0ee",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent:
+                        "space-between",
+                      gap: "20px",
+                      marginBottom: "9px",
+                    }}
+                  >
+                    <strong
+                      style={{
+                        color: "#17201d",
+                        fontSize: "12px",
+                      }}
+                    >
+                      {transaction.merchant}
+                    </strong>
+
+                    <span
+                      className={`status-pill ${
+                        transaction.risk.risk_level ===
+                        "HIGH"
+                          ? "review"
+                          : "approved"
+                      }`}
+                    >
+                      Score{" "}
+                      {transaction.risk.risk_score}
+                    </span>
+                  </div>
+
+                  {transaction.risk.reasons.map(
+                    (reason) => (
+                      <div
+                        key={reason}
+                        style={{
+                          display: "flex",
+                          gap: "8px",
+                          marginTop: "6px",
+                          color: "#6e7974",
+                          fontSize: "10px",
+                        }}
+                      >
+                        <ShieldAlert
+                          size={13}
+                        />
+                        <span>{reason}</span>
+                      </div>
+                    ),
+                  )}
+                </div>
+              ))}
+          </div>
+        </section>
+      )}
     </>
   );
 }

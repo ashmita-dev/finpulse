@@ -33,13 +33,25 @@ export async function getTransactions(): Promise<Transaction[]> {
 export async function getUserTransactions(
   userId: number,
 ): Promise<Transaction[]> {
-  return request<Transaction[]>(`/users/${userId}/transactions`);
+  return request<Transaction[]>(
+    `/users/${userId}/transactions`,
+  );
+}
+
+export async function getUserRiskTransactions(
+  userId: number,
+): Promise<TransactionWithRisk[]> {
+  return request<TransactionWithRisk[]>(
+    `/users/${userId}/risk`,
+  );
 }
 
 export async function getTransaction(
   transactionId: number,
 ): Promise<Transaction> {
-  return request<Transaction>(`/transactions/${transactionId}`);
+  return request<Transaction>(
+    `/transactions/${transactionId}`,
+  );
 }
 
 export async function createTransaction(

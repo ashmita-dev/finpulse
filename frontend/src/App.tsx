@@ -50,7 +50,9 @@ function App() {
   const [transactions, setTransactions] = useState<Transaction[]>(
     [],
   );
+
   const [isLoading, setIsLoading] = useState(true);
+
   const [error, setError] = useState<string | null>(null);
 
   const location = useLocation();
@@ -79,8 +81,9 @@ function App() {
   }, []);
 
   const currentPage =
-    navigation.find((item) => item.path === location.pathname)
-      ?.label ?? "Overview";
+    navigation.find(
+      (item) => item.path === location.pathname,
+    )?.label ?? "Overview";
 
   return (
     <div className="app-shell">
@@ -109,10 +112,16 @@ function App() {
                   to={item.path}
                   end={item.path === "/"}
                   className={({ isActive }) =>
-                    `nav-item ${isActive ? "active" : ""}`
+                    `nav-item ${
+                      isActive ? "active" : ""
+                    }`
                   }
                 >
-                  <Icon size={18} strokeWidth={1.8} />
+                  <Icon
+                    size={18}
+                    strokeWidth={1.8}
+                  />
+
                   <span>{item.label}</span>
                 </NavLink>
               );
@@ -139,7 +148,10 @@ function App() {
             <div className="avatar">AM</div>
 
             <div className="user-details">
-              <span className="user-name">Admin User</span>
+              <span className="user-name">
+                Admin User
+              </span>
+
               <span className="user-role">
                 Risk operations
               </span>
@@ -170,7 +182,11 @@ function App() {
               className="icon-button"
               aria-label="Notifications"
             >
-              <Bell size={19} strokeWidth={1.8} />
+              <Bell
+                size={19}
+                strokeWidth={1.8}
+              />
+
               <span className="notification-dot" />
             </button>
           </div>
@@ -207,9 +223,7 @@ function App() {
 
             <Route
               path="/risk"
-              element={
-                <Risk transactions={transactions} />
-              }
+              element={<Risk />}
             />
 
             <Route
