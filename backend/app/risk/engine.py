@@ -1,36 +1,43 @@
-from app.schemas.transaction import TransactionCreate
 from app.risk.rules import (
-    check_amount_risk,
-    check_new_device,
+    HIGH_AMOUNT_SCORE,
+    HIGH_AMOUNT_THRESHOLD,
+    NEW_DEVICE_SCORE,
+    VERY_HIGH_AMOUNT_SCORE,
+    VERY_HIGH_AMOUNT_THRESHOLD,
 )
+from app.schemas.transaction import TransactionCreate
 
 
 def calculate_risk(transaction: TransactionCreate):
     risk_score = 0
     reasons = []
 
-    amount_score, amount_reason = check_amount_risk(transaction.amount)
+    # Rule 1: transaction amount
+    if transaction.amount >= VERY_HIGH_AMOUNT_THRESHOLD:
+        risk_score += VERY_HIGH_AMOUNT_SCORE
+        reasons.append("Very high transaction amount")
 
-    risk_score += amount_score
+    elif transaction.amount >= HIGH_AMOUNT_THRESHOLD:
+        risk_score += HIGH_AMOUNT_SCORE
+        reasons.append("High transaction amount")
 
-    if amount_reason:
-        reasons.append(amount_reason)
+    # Rule 2: device
+    if transaction.device_id and transaction.device_id.startswith("new_"):
+        risk_score += NEW_DEVICE_SCORE
+        reasons.append("Transaction from a new device")
 
-    device_score, device_reason = check_new_device(transaction.device_id)
-
-    risk_score += device_score
-
-    if device_reason:
-        reasons.append(device_reason)
-
+    # Keep score within 0–100
     risk_score = min(risk_score, 100)
 
+    # Determine risk level and decision
     if risk_score >= 70:
         risk_level = "HIGH"
-        decision = "REVIEW"
+        decision = "BLOCK"
+
     elif risk_score >= 30:
         risk_level = "MEDIUM"
         decision = "REVIEW"
+
     else:
         risk_level = "LOW"
         decision = "APPROVE"
