@@ -6,9 +6,11 @@ from app.repositories.transactions import (
     get_transactions,
     get_transactions_by_user,
 )
+from app.risk.engine import calculate_risk
 from app.schemas.transaction import (
     TransactionCreate,
     TransactionResponse,
+    TransactionWithRiskResponse,
 )
 
 router = APIRouter()
@@ -31,12 +33,17 @@ def transaction_to_response(result):
 
 @router.post(
     "/transactions",
-    response_model=TransactionResponse,
+    response_model=TransactionWithRiskResponse,
 )
 def create_transaction_endpoint(transaction: TransactionCreate):
     result = create_transaction(transaction)
 
-    return transaction_to_response(result)
+    risk = calculate_risk(transaction)
+
+    response = transaction_to_response(result)
+    response["risk"] = risk
+
+    return response
 
 
 @router.get(

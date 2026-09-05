@@ -3,6 +3,8 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field
 
+from app.schemas.risk import RiskAssessment
+
 
 class TransactionCreate(BaseModel):
     user_id: int
@@ -27,3 +29,7 @@ class TransactionResponse(BaseModel):
     location: str | None
     device_id: str | None
     status: str
+
+
+class TransactionWithRiskResponse(TransactionResponse):
+    risk: RiskAssessment
