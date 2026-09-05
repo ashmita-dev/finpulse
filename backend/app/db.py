@@ -1,9 +1,13 @@
 import os
+from pathlib import Path
 
 import psycopg
 from dotenv import load_dotenv
 
-load_dotenv()
+
+ENV_FILE = Path(__file__).resolve().parents[1] / ".env"
+
+load_dotenv(ENV_FILE)
 
 
 def get_connection():
