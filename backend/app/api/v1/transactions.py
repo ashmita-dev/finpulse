@@ -6,6 +6,7 @@ from app.repositories.transactions import (
     get_transaction_by_id,
     get_transactions,
     get_transactions_by_user,
+    get_user_transaction_amounts,
 )
 from app.risk.engine import calculate_risk
 from app.risk.rules import VELOCITY_WINDOW_SECONDS
@@ -44,9 +45,14 @@ def create_transaction_endpoint(transaction: TransactionCreate):
         window_seconds=VELOCITY_WINDOW_SECONDS,
     )
 
+    historical_amounts = get_user_transaction_amounts(
+        user_id=transaction.user_id,
+    )
+
     risk = calculate_risk(
         transaction,
         recent_transaction_count=recent_transaction_count,
+        historical_amounts=historical_amounts,
     )
 
     result = create_transaction(transaction)

@@ -179,3 +179,24 @@ def count_recent_transactions(
 
     finally:
         connection.close()
+
+
+def get_user_transaction_amounts(user_id: int):
+    connection = get_connection()
+
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT amount
+                FROM transactions
+                WHERE user_id = %s
+                ORDER BY timestamp ASC;
+                """,
+                (user_id,),
+            )
+
+            return [row[0] for row in cursor.fetchall()]
+
+    finally:
+        connection.close()
