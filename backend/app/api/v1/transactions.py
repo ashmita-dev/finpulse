@@ -1,12 +1,14 @@
 from fastapi import APIRouter, HTTPException
 
 from app.repositories.transactions import (
+    count_recent_transactions,
     create_transaction,
     get_transaction_by_id,
     get_transactions,
     get_transactions_by_user,
 )
 from app.risk.engine import calculate_risk
+from app.risk.rules import VELOCITY_WINDOW_SECONDS
 from app.schemas.transaction import (
     TransactionCreate,
     TransactionResponse,
@@ -36,9 +38,18 @@ def transaction_to_response(result):
     response_model=TransactionWithRiskResponse,
 )
 def create_transaction_endpoint(transaction: TransactionCreate):
-    result = create_transaction(transaction)
+    recent_transaction_count = count_recent_transactions(
+        user_id=transaction.user_id,
+        timestamp=transaction.timestamp,
+        window_seconds=VELOCITY_WINDOW_SECONDS,
+    )
 
-    risk = calculate_risk(transaction)
+    risk = calculate_risk(
+        transaction,
+        recent_transaction_count=recent_transaction_count,
+    )
+
+    result = create_transaction(transaction)
 
     response = transaction_to_response(result)
     response["risk"] = risk

@@ -1,14 +1,19 @@
 from app.risk.rules import (
     HIGH_AMOUNT_SCORE,
     HIGH_AMOUNT_THRESHOLD,
+    HIGH_VELOCITY_SCORE,
     NEW_DEVICE_SCORE,
     VERY_HIGH_AMOUNT_SCORE,
     VERY_HIGH_AMOUNT_THRESHOLD,
+    VELOCITY_TRANSACTION_LIMIT,
 )
 from app.schemas.transaction import TransactionCreate
 
 
-def calculate_risk(transaction: TransactionCreate):
+def calculate_risk(
+    transaction: TransactionCreate,
+    recent_transaction_count: int = 0,
+):
     risk_score = 0
     reasons = []
 
@@ -21,10 +26,15 @@ def calculate_risk(transaction: TransactionCreate):
         risk_score += HIGH_AMOUNT_SCORE
         reasons.append("High transaction amount")
 
-    # Rule 2: device
+    # Rule 2: new device
     if transaction.device_id and transaction.device_id.startswith("new_"):
         risk_score += NEW_DEVICE_SCORE
         reasons.append("Transaction from a new device")
+
+    # Rule 3: transaction velocity
+    if recent_transaction_count >= VELOCITY_TRANSACTION_LIMIT:
+        risk_score += HIGH_VELOCITY_SCORE
+        reasons.append("High transaction velocity")
 
     # Keep score within 0–100
     risk_score = min(risk_score, 100)

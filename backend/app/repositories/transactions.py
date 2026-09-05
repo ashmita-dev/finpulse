@@ -146,3 +146,36 @@ def get_transactions_by_user(user_id: int):
 
     finally:
         connection.close()
+
+
+def count_recent_transactions(
+    user_id: int,
+    timestamp,
+    window_seconds: int,
+):
+    connection = get_connection()
+
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT COUNT(*)
+                FROM transactions
+                WHERE user_id = %s
+                  AND timestamp >= %s - (%s * INTERVAL '1 second')
+                  AND timestamp <= %s;
+                """,
+                (
+                    user_id,
+                    timestamp,
+                    window_seconds,
+                    timestamp,
+                ),
+            )
+
+            result = cursor.fetchone()
+
+            return result[0]
+
+    finally:
+        connection.close()
