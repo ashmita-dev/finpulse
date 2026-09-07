@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import {
   Activity,
   ChevronDown,
@@ -8,19 +8,19 @@ import {
   Wallet,
 } from "lucide-react";
 
+import { useAppDispatch, useAppSelector } from "../app/hooks";
+import { fetchUserTransactions } from "../features/transactions/transactionsSlice";
+
 import type { Transaction } from "../types/transaction";
 
-interface DashboardProps {
-  transactions: Transaction[];
-  isLoading: boolean;
-}
+function formatCurrency(amount: string, currency: string) {
+  const numericAmount = Number(amount);
 
-function formatCurrency(amount: number, currency: string) {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency,
     maximumFractionDigits: 2,
-  }).format(amount);
+  }).format(numericAmount);
 }
 
 function formatTime(timestamp: string) {
@@ -30,41 +30,41 @@ function formatTime(timestamp: string) {
   }).format(new Date(timestamp));
 }
 
-function Dashboard({
-  transactions,
-  isLoading,
-}: DashboardProps) {
+function Dashboard() {
+  const dispatch = useAppDispatch();
+
+  const {
+    items: transactions,
+    isLoading,
+    error,
+  } = useAppSelector((state) => state.transactions);
+
+  useEffect(() => {
+    if (transactions.length === 0) {
+      dispatch(fetchUserTransactions(1));
+    }
+  }, [dispatch, transactions.length]);
+
   const totalSpending = useMemo(() => {
     return transactions.reduce(
-      (total, transaction) => total + Number(transaction.amount),
+      (total, transaction) =>
+        total + Number(transaction.amount),
       0,
     );
   }, [transactions]);
 
-  const recentTransactions = transactions.slice(0, 5);
-
-  const highRiskCount = transactions.filter(
-    (transaction) => Number(transaction.amount) >= 50000,
-  ).length;
-
-  const reviewCount = transactions.filter(
-    (transaction) =>
-      Number(transaction.amount) >= 10000 &&
-      Number(transaction.amount) < 50000,
-  ).length;
-
-  const approvedCount = Math.max(
-    transactions.length - highRiskCount - reviewCount,
-    0,
-  );
+  const recentTransactions: Transaction[] =
+    transactions.slice(0, 5);
 
   return (
-    <>
+    <section className="page-content">
       <div className="intro-row">
         <div>
           <h2>Financial overview.</h2>
+
           <p>
-            Monitor spending, transactions and risk activity in real time.
+            Monitor spending, transactions and risk activity
+            in real time.
           </p>
         </div>
 
@@ -74,6 +74,13 @@ function Dashboard({
         </div>
       </div>
 
+      {error && (
+        <div className="error-banner">
+          <ShieldAlert size={16} />
+          <span>{error}</span>
+        </div>
+      )}
+
       <section className="metrics-grid">
         <article className="metric-card primary">
           <div className="metric-header">
@@ -81,7 +88,9 @@ function Dashboard({
             <Wallet size={19} strokeWidth={1.7} />
           </div>
 
-          <div className="metric-value">₹84,250.00</div>
+          <div className="metric-value">
+            ₹84,250.00
+          </div>
 
           <div className="metric-footer positive">
             <TrendingUp size={15} />
@@ -99,28 +108,31 @@ function Dashboard({
             {isLoading
               ? "—"
               : formatCurrency(
-                  totalSpending,
+                  totalSpending.toFixed(2),
                   transactions[0]?.currency ?? "INR",
                 )}
           </div>
 
           <div className="metric-footer">
-            <span>{transactions.length} transactions loaded</span>
+            <span>
+              {transactions.length} transactions loaded
+            </span>
           </div>
         </article>
 
         <article className="metric-card">
           <div className="metric-header">
             <span>Risk activity</span>
-            <ShieldAlert size={19} strokeWidth={1.7} />
+            <ShieldAlert
+              size={19}
+              strokeWidth={1.7}
+            />
           </div>
 
-          <div className="metric-value">
-            {String(highRiskCount + reviewCount).padStart(2, "0")}
-          </div>
+          <div className="metric-value">07</div>
 
           <div className="metric-footer warning">
-            <span>{reviewCount} require review</span>
+            <span>3 require review</span>
           </div>
         </article>
 
@@ -144,7 +156,10 @@ function Dashboard({
         <article className="panel spending-panel">
           <div className="panel-header">
             <div>
-              <span className="panel-kicker">Cash flow</span>
+              <span className="panel-kicker">
+                Cash flow
+              </span>
+
               <h3>Spending trajectory</h3>
             </div>
 
@@ -180,6 +195,7 @@ function Dashboard({
                     offset="0%"
                     stopColor="rgba(42, 213, 164, 0.20)"
                   />
+
                   <stop
                     offset="100%"
                     stopColor="rgba(42, 213, 164, 0)"
@@ -220,20 +236,28 @@ function Dashboard({
         <article className="panel risk-summary">
           <div className="panel-header">
             <div>
-              <span className="panel-kicker">Risk engine</span>
+              <span className="panel-kicker">
+                Risk engine
+              </span>
+
               <h3>Risk activity</h3>
             </div>
+
+            <button className="text-button">
+              View all
+            </button>
           </div>
 
           <div className="risk-score-block">
-            <div className="risk-score">
-              {highRiskCount > 0 ? "72" : "18"}
-            </div>
+            <div className="risk-score">72</div>
 
             <div>
-              <span className="risk-label">Current risk index</span>
+              <span className="risk-label">
+                Current risk index
+              </span>
+
               <span className="risk-change">
-                Based on transaction activity
+                ↑ 12% vs yesterday
               </span>
             </div>
           </div>
@@ -243,19 +267,11 @@ function Dashboard({
               <div className="risk-bar-label">
                 <span className="risk-indicator high" />
                 High risk
-                <strong>{highRiskCount}</strong>
+                <strong>2</strong>
               </div>
 
               <div className="risk-bar">
-                <span
-                  className="high-fill"
-                  style={{
-                    width: `${Math.min(
-                      highRiskCount * 12,
-                      100,
-                    )}%`,
-                  }}
-                />
+                <span className="high-fill" />
               </div>
             </div>
 
@@ -263,19 +279,11 @@ function Dashboard({
               <div className="risk-bar-label">
                 <span className="risk-indicator medium" />
                 Review
-                <strong>{reviewCount}</strong>
+                <strong>3</strong>
               </div>
 
               <div className="risk-bar">
-                <span
-                  className="medium-fill"
-                  style={{
-                    width: `${Math.min(
-                      reviewCount * 12,
-                      100,
-                    )}%`,
-                  }}
-                />
+                <span className="medium-fill" />
               </div>
             </div>
 
@@ -283,19 +291,16 @@ function Dashboard({
               <div className="risk-bar-label">
                 <span className="risk-indicator low" />
                 Approved
-                <strong>{approvedCount}</strong>
+                <strong>
+                  {Math.max(
+                    transactions.length - 5,
+                    0,
+                  )}
+                </strong>
               </div>
 
               <div className="risk-bar">
-                <span
-                  className="low-fill"
-                  style={{
-                    width: `${Math.min(
-                      approvedCount * 8,
-                      100,
-                    )}%`,
-                  }}
-                />
+                <span className="low-fill" />
               </div>
             </div>
           </div>
@@ -305,7 +310,10 @@ function Dashboard({
       <section className="panel activity-panel">
         <div className="panel-header">
           <div>
-            <span className="panel-kicker">Live feed</span>
+            <span className="panel-kicker">
+              Live feed
+            </span>
+
             <h3>Recent activity</h3>
           </div>
 
@@ -334,14 +342,22 @@ function Dashboard({
             </div>
           ) : (
             recentTransactions.map((transaction) => (
-              <div className="table-row" key={transaction.id}>
+              <div
+                className="table-row"
+                key={transaction.id}
+              >
                 <div className="transaction-cell">
                   <div className="merchant-icon">
-                    {transaction.merchant.charAt(0).toUpperCase()}
+                    {transaction.merchant
+                      .charAt(0)
+                      .toUpperCase()}
                   </div>
 
                   <div>
-                    <strong>{transaction.merchant}</strong>
+                    <strong>
+                      {transaction.merchant}
+                    </strong>
+
                     <span>
                       {transaction.location ??
                         "Location unavailable"}
@@ -351,16 +367,25 @@ function Dashboard({
 
                 <span>{transaction.category}</span>
 
-                <span>{formatTime(transaction.timestamp)}</span>
+                <span>
+                  {formatTime(transaction.timestamp)}
+                </span>
 
                 <strong>
                   {formatCurrency(
-                    Number(transaction.amount),
+                    transaction.amount,
                     transaction.currency,
                   )}
                 </strong>
 
-                <span className="status-pill approved">
+                <span
+                  className={`status-pill ${
+                    transaction.status.toLowerCase() ===
+                    "completed"
+                      ? "approved"
+                      : "review"
+                  }`}
+                >
                   {transaction.status}
                 </span>
               </div>
@@ -368,7 +393,7 @@ function Dashboard({
           )}
         </div>
       </section>
-    </>
+    </section>
   );
 }
 

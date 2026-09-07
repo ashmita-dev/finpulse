@@ -1,14 +1,15 @@
 import { useMemo, useState } from "react";
-import { Search, SlidersHorizontal } from "lucide-react";
+import {
+  Search,
+  SlidersHorizontal,
+} from "lucide-react";
 
-import type { Transaction } from "../types/transaction";
+import { useAppSelector } from "../app/hooks";
 
-interface TransactionsProps {
-  transactions: Transaction[];
-  isLoading: boolean;
-}
-
-function formatCurrency(amount: string, currency: string) {
+function formatCurrency(
+  amount: string,
+  currency: string,
+) {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency,
@@ -26,10 +27,13 @@ function formatDate(timestamp: string) {
   }).format(new Date(timestamp));
 }
 
-function Transactions({
-  transactions,
-  isLoading,
-}: TransactionsProps) {
+function Transactions() {
+  const {
+    items: transactions,
+    isLoading,
+    error,
+  } = useAppSelector((state) => state.transactions);
+
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
 
@@ -37,13 +41,18 @@ function Transactions({
     return [
       "All",
       ...Array.from(
-        new Set(transactions.map((transaction) => transaction.category)),
+        new Set(
+          transactions.map(
+            (transaction) => transaction.category,
+          ),
+        ),
       ),
     ];
   }, [transactions]);
 
   const filteredTransactions = useMemo(() => {
-    const normalizedSearch = search.trim().toLowerCase();
+    const normalizedSearch =
+      search.trim().toLowerCase();
 
     return transactions.filter((transaction) => {
       const matchesSearch =
@@ -56,96 +65,81 @@ function Transactions({
           .includes(normalizedSearch);
 
       const matchesCategory =
-        category === "All" || transaction.category === category;
+        category === "All" ||
+        transaction.category === category;
 
       return matchesSearch && matchesCategory;
     });
   }, [transactions, search, category]);
 
   return (
-    <>
+    <section className="page-content">
       <div className="intro-row">
         <div>
           <h2>Transactions.</h2>
+
           <p>
-            Review every transaction flowing through the FinPulse system.
+            Review every transaction flowing through the
+            FinPulse system.
           </p>
         </div>
       </div>
 
+      {error && (
+        <div className="error-banner">
+          <span>{error}</span>
+        </div>
+      )}
+
       <section className="panel">
         <div className="panel-header">
           <div>
-            <span className="panel-kicker">Transaction ledger</span>
+            <span className="panel-kicker">
+              Transaction ledger
+            </span>
+
             <h3>
               {filteredTransactions.length} transactions
             </h3>
           </div>
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            gap: "10px",
-            padding: "20px 21px",
-            borderTop: "1px solid #eef0ee",
-          }}
-        >
-          <div
-            style={{
-              flex: 1,
-              display: "flex",
-              alignItems: "center",
-              gap: "9px",
-              padding: "9px 11px",
-              border: "1px solid #e4e8e4",
-              borderRadius: "7px",
-              background: "#fafbf9",
-            }}
-          >
-            <Search size={15} color="#89948f" />
+        <div className="transaction-toolbar">
+          <div className="transaction-search">
+            <Search
+              size={15}
+              strokeWidth={1.8}
+            />
 
             <input
+              type="search"
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={(event) =>
+                setSearch(event.target.value)
+              }
               placeholder="Search merchant or category..."
-              style={{
-                width: "100%",
-                border: 0,
-                outline: 0,
-                background: "transparent",
-                color: "#17201d",
-                fontSize: "11px",
-              }}
+              aria-label="Search transactions"
             />
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              padding: "9px 11px",
-              border: "1px solid #e4e8e4",
-              borderRadius: "7px",
-              background: "#fafbf9",
-            }}
-          >
-            <SlidersHorizontal size={14} color="#89948f" />
+          <div className="transaction-filter">
+            <SlidersHorizontal
+              size={14}
+              strokeWidth={1.8}
+            />
 
             <select
               value={category}
-              onChange={(event) => setCategory(event.target.value)}
-              style={{
-                border: 0,
-                outline: 0,
-                background: "transparent",
-                color: "#53605b",
-                fontSize: "11px",
-              }}
+              onChange={(event) =>
+                setCategory(event.target.value)
+              }
+              aria-label="Filter by category"
             >
               {categories.map((item) => (
-                <option key={item} value={item}>
+                <option
+                  key={item}
+                  value={item}
+                >
                   {item}
                 </option>
               ))}
@@ -172,14 +166,22 @@ function Transactions({
             </div>
           ) : (
             filteredTransactions.map((transaction) => (
-              <div className="table-row" key={transaction.id}>
+              <div
+                className="table-row"
+                key={transaction.id}
+              >
                 <div className="transaction-cell">
                   <div className="merchant-icon">
-                    {transaction.merchant.charAt(0).toUpperCase()}
+                    {transaction.merchant
+                      .charAt(0)
+                      .toUpperCase()}
                   </div>
 
                   <div>
-                    <strong>{transaction.merchant}</strong>
+                    <strong>
+                      {transaction.merchant}
+                    </strong>
+
                     <span>
                       {transaction.location ??
                         "Location unavailable"}
@@ -187,9 +189,15 @@ function Transactions({
                   </div>
                 </div>
 
-                <span>{transaction.category}</span>
+                <span>
+                  {transaction.category}
+                </span>
 
-                <span>{formatDate(transaction.timestamp)}</span>
+                <span>
+                  {formatDate(
+                    transaction.timestamp,
+                  )}
+                </span>
 
                 <strong>
                   {formatCurrency(
@@ -198,7 +206,14 @@ function Transactions({
                   )}
                 </strong>
 
-                <span className="status-pill approved">
+                <span
+                  className={`status-pill ${
+                    transaction.status.toLowerCase() ===
+                    "completed"
+                      ? "approved"
+                      : "review"
+                  }`}
+                >
                   {transaction.status}
                 </span>
               </div>
@@ -206,7 +221,7 @@ function Transactions({
           )}
         </div>
       </section>
-    </>
+    </section>
   );
 }
 
