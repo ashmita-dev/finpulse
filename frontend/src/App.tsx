@@ -14,13 +14,17 @@ import {
   NavLink,
   Route,
   Routes,
-  useLocation,
 } from "react-router-dom";
 
 import "./App.css";
 
-import { useAppDispatch, useAppSelector } from "./app/hooks";
-import { fetchUserTransactions } from "./features/transactions/transactionsSlice";
+import {
+  useAppDispatch,
+  useAppSelector,
+} from "./app/hooks";
+import {
+  fetchUserTransactions,
+} from "./features/transactions/transactionsSlice";
 import Transactions from "./pages/Transactions";
 import Risk from "./pages/Risk";
 import Analytics from "./pages/Analytics";
@@ -73,7 +77,9 @@ function Dashboard() {
     items: transactions,
     isLoading,
     error,
-  } = useAppSelector((state) => state.transactions);
+  } = useAppSelector(
+    (state) => state.transactions,
+  );
 
   const totalSpending = useMemo(() => {
     return transactions.reduce(
@@ -83,12 +89,24 @@ function Dashboard() {
     );
   }, [transactions]);
 
-  const recentTransactions = transactions.slice(0, 5);
+  const recentTransactions =
+    transactions.slice(0, 5);
+
+  const highRiskCount = 2;
+  const reviewCount = 3;
+  const approvedCount = Math.max(
+    transactions.length - 5,
+    0,
+  );
 
   return (
     <>
-      <div className="intro-row">
+      <div className="intro-row page-intro">
         <div>
+          <span className="section-overline">
+            Portfolio overview
+          </span>
+
           <h2>Financial overview.</h2>
 
           <p>
@@ -119,7 +137,7 @@ function Dashboard() {
       )}
 
       <section className="metrics-grid">
-        <article className="metric-card primary">
+        <article className="metric-card primary reveal-card">
           <div className="metric-header">
             <span>Available balance</span>
 
@@ -140,7 +158,7 @@ function Dashboard() {
           </div>
         </article>
 
-        <article className="metric-card">
+        <article className="metric-card reveal-card">
           <div className="metric-header">
             <span>Tracked spending</span>
 
@@ -155,7 +173,8 @@ function Dashboard() {
               ? "—"
               : formatCurrency(
                   totalSpending.toFixed(2),
-                  transactions[0]?.currency ?? "INR",
+                  transactions[0]?.currency ??
+                    "INR",
                 )}
           </div>
 
@@ -166,7 +185,7 @@ function Dashboard() {
           </div>
         </article>
 
-        <article className="metric-card">
+        <article className="metric-card reveal-card">
           <div className="metric-header">
             <span>Risk activity</span>
 
@@ -177,15 +196,17 @@ function Dashboard() {
           </div>
 
           <div className="metric-value">
-            07
+            {isLoading ? "—" : "07"}
           </div>
 
           <div className="metric-footer warning">
-            <span>3 require review</span>
+            <span>
+              {reviewCount} require review
+            </span>
           </div>
         </article>
 
-        <article className="metric-card">
+        <article className="metric-card reveal-card">
           <div className="metric-header">
             <span>Transactions</span>
 
@@ -208,7 +229,7 @@ function Dashboard() {
       </section>
 
       <section className="dashboard-grid">
-        <article className="panel spending-panel">
+        <article className="panel spending-panel reveal-panel">
           <div className="panel-header">
             <div>
               <span className="panel-kicker">
@@ -252,7 +273,7 @@ function Dashboard() {
                 >
                   <stop
                     offset="0%"
-                    stopColor="rgba(42, 213, 164, 0.20)"
+                    stopColor="rgba(42, 213, 164, 0.18)"
                   />
 
                   <stop
@@ -292,7 +313,7 @@ function Dashboard() {
           </div>
         </article>
 
-        <article className="panel risk-summary">
+        <article className="panel risk-summary reveal-panel">
           <div className="panel-header">
             <div>
               <span className="panel-kicker">
@@ -333,7 +354,7 @@ function Dashboard() {
 
                 High risk
 
-                <strong>2</strong>
+                <strong>{highRiskCount}</strong>
               </div>
 
               <div className="risk-bar">
@@ -347,7 +368,7 @@ function Dashboard() {
 
                 Review
 
-                <strong>3</strong>
+                <strong>{reviewCount}</strong>
               </div>
 
               <div className="risk-bar">
@@ -361,12 +382,7 @@ function Dashboard() {
 
                 Approved
 
-                <strong>
-                  {Math.max(
-                    transactions.length - 5,
-                    0,
-                  )}
-                </strong>
+                <strong>{approvedCount}</strong>
               </div>
 
               <div className="risk-bar">
@@ -377,7 +393,7 @@ function Dashboard() {
         </article>
       </section>
 
-      <section className="panel activity-panel">
+      <section className="panel activity-panel reveal-panel">
         <div className="panel-header">
           <div>
             <span className="panel-kicker">
@@ -407,16 +423,20 @@ function Dashboard() {
             <div className="empty-state">
               Loading transactions…
             </div>
-          ) : recentTransactions.length === 0 ? (
+          ) : recentTransactions.length ===
+            0 ? (
             <div className="empty-state">
               No transactions found for this user.
             </div>
           ) : (
             recentTransactions.map(
-              (transaction) => (
+              (transaction, index) => (
                 <div
-                  className="table-row"
+                  className="table-row activity-row"
                   key={transaction.id}
+                  style={{
+                    animationDelay: `${index * 45}ms`,
+                  }}
                 >
                   <div className="transaction-cell">
                     <div className="merchant-icon">
@@ -476,35 +496,6 @@ function Dashboard() {
 
 function App() {
   const dispatch = useAppDispatch();
-  const location = useLocation();
-
-  const pageInfo = useMemo(() => {
-    switch (location.pathname) {
-      case "/transactions":
-        return {
-          eyebrow: "Financial intelligence",
-          title: "Transactions",
-        };
-
-      case "/risk":
-        return {
-          eyebrow: "Financial intelligence",
-          title: "Risk monitor",
-        };
-
-      case "/analytics":
-        return {
-          eyebrow: "Financial intelligence",
-          title: "Analytics",
-        };
-
-      default:
-        return {
-          eyebrow: "Financial intelligence",
-          title: "Overview",
-        };
-    }
-  }, [location.pathname]);
 
   useEffect(() => {
     dispatch(fetchUserTransactions(1));
@@ -598,18 +589,23 @@ function App() {
 
       <main className="main-content">
         <header className="topbar">
-          <div>
-            <span className="eyebrow">
-              {pageInfo.eyebrow}
+          <div className="topbar-context">
+            <span className="topbar-brand">
+              FINPULSE
             </span>
 
-            <h1>{pageInfo.title}</h1>
+            <span className="topbar-divider">
+              /
+            </span>
+
+            <span>
+              Operations workspace
+            </span>
           </div>
 
           <div className="topbar-actions">
             <div className="live-indicator">
               <span className="live-dot" />
-
               LIVE
             </div>
 
