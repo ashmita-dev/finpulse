@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 
 import { useAppSelector } from "../app/hooks";
-import { getUserRiskTransactions } from "../services/api";
+import { createTransaction, getUserRiskTransactions } from "../services/api";
 import type {
   Transaction,
   TransactionWithRisk,
@@ -81,6 +81,81 @@ function Transactions() {
 
   const [isRiskLoading, setIsRiskLoading] =
     useState(false);
+
+  const [isCreating, setIsCreating] = useState(false);
+  const [createError, setCreateError] = useState("");
+  const [createdRisk, setCreatedRisk] =
+    useState<TransactionWithRisk | null>(null);
+  const [form, setForm] = useState({
+    amount: "",
+    merchant: "",
+    category: "Shopping",
+    currency: "INR",
+    location: "Kolkata",
+    device_id: "device_001",
+  });
+
+  function updateForm(
+    field: keyof typeof form,
+    value: string,
+  ) {
+    setForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  }
+
+  async function handleCreateTransaction() {
+    setCreateError("");
+    setCreatedRisk(null);
+
+    const amount = Number(form.amount);
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setCreateError("Enter a valid transaction amount.");
+      return;
+    }
+
+    if (!form.merchant.trim()) {
+      setCreateError("Enter a merchant name.");
+      return;
+    }
+
+    try {
+      setIsCreating(true);
+
+      const result = await createTransaction({
+        user_id: 1,
+        amount: form.amount,
+        currency: form.currency,
+        merchant: form.merchant.trim(),
+        category: form.category,
+        timestamp: new Date().toISOString(),
+        location: form.location.trim() || null,
+        device_id: form.device_id.trim() || null,
+        status: "completed",
+      });
+
+      setCreatedRisk(result);
+      setForm((current) => ({
+        ...current,
+        amount: "",
+        merchant: "",
+      }));
+    } catch (err) {
+      setCreateError(
+        err instanceof Error
+          ? err.message
+          : "Unable to create transaction.",
+      );
+    } finally {
+      setIsCreating(false);
+    }
+  }
+
+  const createdRiskColor = createdRisk
+    ? getRiskColor(createdRisk.risk.risk_level)
+    : null;
 
   useEffect(() => {
     async function loadRiskData() {
@@ -205,6 +280,478 @@ function Transactions() {
         </div>
       )}
 
+      <section
+        className="panel"
+        style={{
+          marginBottom: "18px",
+          border: "1px solid #dcefe8",
+          background:
+            "linear-gradient(135deg, #ffffff 0%, #f4fbf8 100%)",
+        }}
+      >
+        <div
+          className="panel-header"
+          style={{
+            alignItems: "flex-start",
+            gap: "20px",
+          }}
+        >
+          <div>
+            <span className="panel-kicker">
+              Live transaction screening
+            </span>
+            <h3 style={{ marginTop: "4px" }}>
+              Analyze a new transaction
+            </h3>
+            <p
+              style={{
+                margin: "6px 0 0",
+                color: "#87908c",
+                fontSize: "10px",
+              }}
+            >
+              Submit a transaction and receive an instant risk decision.
+            </p>
+          </div>
+          <ShieldAlert
+            size={20}
+            color="#148f70"
+            strokeWidth={1.8}
+          />
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns:
+              "1fr 1.4fr 1fr 0.7fr",
+            gap: "10px",
+            padding: "0 21px 18px",
+          }}
+        >
+          <div>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "6px",
+                color: "#6e7974",
+                fontSize: "9px",
+                fontWeight: 600,
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+              }}
+            >
+              Amount
+            </label>
+            <input
+              value={form.amount}
+              onChange={(event) =>
+                updateForm("amount", event.target.value)
+              }
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="8000"
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                padding: "10px 11px",
+                border: "1px solid #dfe6e2",
+                borderRadius: "7px",
+                background: "#ffffff",
+                color: "#17201d",
+                fontFamily: "inherit",
+                fontSize: "11px",
+                outline: "none",
+              }}
+            />
+          </div>
+
+          <div>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "6px",
+                color: "#6e7974",
+                fontSize: "9px",
+                fontWeight: 600,
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+              }}
+            >
+              Merchant
+            </label>
+            <input
+              value={form.merchant}
+              onChange={(event) =>
+                updateForm("merchant", event.target.value)
+              }
+              placeholder="Luxury Store"
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                padding: "10px 11px",
+                border: "1px solid #dfe6e2",
+                borderRadius: "7px",
+                background: "#ffffff",
+                color: "#17201d",
+                fontFamily: "inherit",
+                fontSize: "11px",
+                outline: "none",
+              }}
+            />
+          </div>
+
+          <div>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "6px",
+                color: "#6e7974",
+                fontSize: "9px",
+                fontWeight: 600,
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+              }}
+            >
+              Category
+            </label>
+            <select
+              value={form.category}
+              onChange={(event) =>
+                updateForm("category", event.target.value)
+              }
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                padding: "10px 11px",
+                border: "1px solid #dfe6e2",
+                borderRadius: "7px",
+                background: "#ffffff",
+                color: "#17201d",
+                fontFamily: "inherit",
+                fontSize: "11px",
+                outline: "none",
+              }}
+            >
+              {[
+                "Shopping",
+                "Food",
+                "Travel",
+                "Entertainment",
+                "Bills",
+                "Transfer",
+                "Other",
+              ].map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "6px",
+                color: "#6e7974",
+                fontSize: "9px",
+                fontWeight: 600,
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+              }}
+            >
+              Currency
+            </label>
+            <select
+              value={form.currency}
+              onChange={(event) =>
+                updateForm("currency", event.target.value)
+              }
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                padding: "10px 11px",
+                border: "1px solid #dfe6e2",
+                borderRadius: "7px",
+                background: "#ffffff",
+                color: "#17201d",
+                fontFamily: "inherit",
+                fontSize: "11px",
+                outline: "none",
+              }}
+            >
+              <option value="INR">INR</option>
+              <option value="USD">USD</option>
+              <option value="EUR">EUR</option>
+              <option value="GBP">GBP</option>
+            </select>
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr auto",
+            gap: "10px",
+            alignItems: "end",
+            padding: "0 21px 20px",
+          }}
+        >
+          <div>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "6px",
+                color: "#6e7974",
+                fontSize: "9px",
+                fontWeight: 600,
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+              }}
+            >
+              Location
+            </label>
+            <input
+              value={form.location}
+              onChange={(event) =>
+                updateForm("location", event.target.value)
+              }
+              placeholder="Kolkata"
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                padding: "10px 11px",
+                border: "1px solid #dfe6e2",
+                borderRadius: "7px",
+                background: "#ffffff",
+                color: "#17201d",
+                fontFamily: "inherit",
+                fontSize: "11px",
+                outline: "none",
+              }}
+            />
+          </div>
+
+          <div>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "6px",
+                color: "#6e7974",
+                fontSize: "9px",
+                fontWeight: 600,
+                textTransform: "uppercase",
+                letterSpacing: "0.08em",
+              }}
+            >
+              Device ID
+            </label>
+            <input
+              value={form.device_id}
+              onChange={(event) =>
+                updateForm("device_id", event.target.value)
+              }
+              placeholder="device_001"
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                padding: "10px 11px",
+                border: "1px solid #dfe6e2",
+                borderRadius: "7px",
+                background: "#ffffff",
+                color: "#17201d",
+                fontFamily: "inherit",
+                fontSize: "11px",
+                outline: "none",
+              }}
+            />
+          </div>
+
+          <button
+            type="button"
+            onClick={handleCreateTransaction}
+            disabled={isCreating}
+            style={{
+              minWidth: "165px",
+              padding: "11px 16px",
+              border: "1px solid #148f70",
+              borderRadius: "7px",
+              background: "#148f70",
+              color: "#ffffff",
+              fontFamily: "inherit",
+              fontSize: "10px",
+              fontWeight: 700,
+              cursor: isCreating ? "wait" : "pointer",
+              opacity: isCreating ? 0.7 : 1,
+            }}
+          >
+            {isCreating
+              ? "Screening..."
+              : "Analyze Transaction"}
+          </button>
+        </div>
+
+        {(createError || createdRisk) && (
+          <div
+            style={{
+              margin: "0 21px 20px",
+              padding: "15px",
+              border: `1px solid ${
+                createError
+                  ? "#f0d4d4"
+                  : createdRiskColor?.background === "#ffebeb"
+                    ? "#f0d4d4"
+                    : "#dcefe8"
+              }`,
+              borderRadius: "8px",
+              background: createError
+                ? "#fff8f8"
+                : "#ffffff",
+            }}
+          >
+            {createError ? (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  color: "#c84d4d",
+                  fontSize: "10px",
+                }}
+              >
+                <AlertTriangle size={14} />
+                {createError}
+              </div>
+            ) : createdRisk ? (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "16px",
+                  flexWrap: "wrap",
+                }}
+              >
+                <div>
+                  <span
+                    style={{
+                      display: "block",
+                      marginBottom: "5px",
+                      color: "#87908c",
+                      fontSize: "9px",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.1em",
+                    }}
+                  >
+                    Instant decision
+                  </span>
+                  <strong
+                    style={{
+                      display: "block",
+                      color: "#17201d",
+                      fontSize: "19px",
+                    }}
+                  >
+                    {createdRisk.risk.decision}
+                  </strong>
+                  <span
+                    style={{
+                      display: "block",
+                      marginTop: "4px",
+                      color: "#6e7974",
+                      fontSize: "10px",
+                    }}
+                  >
+                    {createdRisk.merchant} · {formatCurrency(
+                      createdRisk.amount,
+                      createdRisk.currency,
+                    )}
+                  </span>
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px",
+                  }}
+                >
+                  <div
+                    style={{
+                      padding: "11px 14px",
+                      border: "1px solid #e4e8e4",
+                      borderRadius: "7px",
+                      background: "#fafbf9",
+                    }}
+                  >
+                    <span
+                      style={{
+                        display: "block",
+                        marginBottom: "4px",
+                        color: "#87908c",
+                        fontSize: "8px",
+                      }}
+                    >
+                      RISK SCORE
+                    </span>
+                    <strong
+                      style={{
+                        color: "#17201d",
+                        fontSize: "18px",
+                      }}
+                    >
+                      {createdRisk.risk.risk_score}/100
+                    </strong>
+                  </div>
+
+                  <span
+                    style={{
+                      padding: "7px 10px",
+                      borderRadius: "6px",
+                      fontSize: "9px",
+                      fontWeight: 700,
+                      letterSpacing: "0.05em",
+                      ...createdRiskColor,
+                    }}
+                  >
+                    {createdRisk.risk.risk_level}
+                  </span>
+                </div>
+
+                {createdRisk.risk.reasons.length > 0 && (
+                  <div
+                    style={{
+                      width: "100%",
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: "6px",
+                    }}
+                  >
+                    {createdRisk.risk.reasons.map((reason) => (
+                      <span
+                        key={reason}
+                        style={{
+                          padding: "6px 8px",
+                          border: "1px solid #eef0ee",
+                          borderRadius: "5px",
+                          background: "#fafbf9",
+                          color: "#53605b",
+                          fontSize: "9px",
+                        }}
+                      >
+                        {reason}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </div>
+        )}
+      </section>
+
       <section className="panel">
         <div className="panel-header">
           <div>
@@ -272,7 +819,7 @@ function Transactions() {
 
           {isLoading ? (
             <div className="empty-state">
-              Loading transactions…
+              Loading transactionsâ€¦
             </div>
           ) : filteredTransactions.length ===
             0 ? (
@@ -799,7 +1346,7 @@ function Transactions() {
                       fontSize: "9px",
                     }}
                   >
-                    Loading…
+                    Loadingâ€¦
                   </span>
                 )}
               </div>

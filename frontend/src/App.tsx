@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   BarChart3,
@@ -25,6 +25,8 @@ import {
 import {
   fetchUserTransactions,
 } from "./features/transactions/transactionsSlice";
+import { getUserRiskTransactions } from "./services/api";
+import type { TransactionWithRisk } from "./types/transaction";
 import Transactions from "./pages/Transactions";
 import Risk from "./pages/Risk";
 import Analytics from "./pages/Analytics";
@@ -81,6 +83,39 @@ function Dashboard() {
     (state) => state.transactions,
   );
 
+  const [riskTransactions, setRiskTransactions] =
+    useState<TransactionWithRisk[]>([]);
+
+  const [riskLoading, setRiskLoading] =
+    useState(true);
+
+  const [riskError, setRiskError] =
+    useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadRiskData() {
+      try {
+        setRiskLoading(true);
+        setRiskError(null);
+
+        const data =
+          await getUserRiskTransactions(1);
+
+        setRiskTransactions(data);
+      } catch (requestError) {
+        setRiskError(
+          requestError instanceof Error
+            ? requestError.message
+            : "Unable to load risk data.",
+        );
+      } finally {
+        setRiskLoading(false);
+      }
+    }
+
+    loadRiskData();
+  }, []);
+
   const totalSpending = useMemo(() => {
     return transactions.reduce(
       (total, transaction) =>
@@ -89,15 +124,66 @@ function Dashboard() {
     );
   }, [transactions]);
 
+  const highRiskCount = useMemo(() => {
+    return riskTransactions.filter(
+      (transaction) =>
+        transaction.risk.risk_level === "HIGH",
+    ).length;
+  }, [riskTransactions]);
+
+  const reviewCount = useMemo(() => {
+    return riskTransactions.filter(
+      (transaction) =>
+        transaction.risk.risk_level === "MEDIUM",
+    ).length;
+  }, [riskTransactions]);
+
+  const approvedCount = useMemo(() => {
+    return riskTransactions.filter(
+      (transaction) =>
+        transaction.risk.risk_level === "LOW",
+    ).length;
+  }, [riskTransactions]);
+
+  const riskActivityCount =
+    highRiskCount + reviewCount;
+
+  const averageRiskScore = useMemo(() => {
+    if (riskTransactions.length === 0) {
+      return 0;
+    }
+
+    const total = riskTransactions.reduce(
+      (sum, transaction) =>
+        sum + transaction.risk.risk_score,
+      0,
+    );
+
+    return Math.round(
+      total / riskTransactions.length,
+    );
+  }, [riskTransactions]);
+
   const recentTransactions =
     transactions.slice(0, 5);
 
-  const highRiskCount = 2;
-  const reviewCount = 3;
-  const approvedCount = Math.max(
-    transactions.length - 5,
-    0,
-  );
+  const totalRiskTransactions =
+    riskTransactions.length;
+
+  const highRiskWidth =
+    totalRiskTransactions > 0
+      ? `${(highRiskCount / totalRiskTransactions) * 100}%`
+      : "0%";
+
+  const reviewWidth =
+    totalRiskTransactions > 0
+      ? `${(reviewCount / totalRiskTransactions) * 100}%`
+      : "0%";
+
+  const approvedWidth =
+    totalRiskTransactions > 0
+      ? `${(approvedCount / totalRiskTransactions) * 100}%`
+      : "0%";
 
   return (
     <>
@@ -110,8 +196,8 @@ function Dashboard() {
           <h2>Financial overview.</h2>
 
           <p>
-            Monitor spending, transactions and risk activity
-            in real time.
+            Monitor spending, transactions and risk
+            activity in real time.
           </p>
         </div>
 
@@ -131,15 +217,21 @@ function Dashboard() {
       {error && (
         <div className="error-banner">
           <ShieldAlert size={16} />
-
           <span>{error}</span>
+        </div>
+      )}
+
+      {riskError && (
+        <div className="error-banner">
+          <ShieldAlert size={16} />
+          <span>{riskError}</span>
         </div>
       )}
 
       <section className="metrics-grid">
         <article className="metric-card primary reveal-card">
           <div className="metric-header">
-            <span>Available balance</span>
+            <span>Tracked spending</span>
 
             <Wallet
               size={19}
@@ -148,29 +240,8 @@ function Dashboard() {
           </div>
 
           <div className="metric-value">
-            ₹84,250.00
-          </div>
-
-          <div className="metric-footer positive">
-            <TrendingUp size={15} />
-
-            <span>+8.4% this month</span>
-          </div>
-        </article>
-
-        <article className="metric-card reveal-card">
-          <div className="metric-header">
-            <span>Tracked spending</span>
-
-            <CreditCard
-              size={19}
-              strokeWidth={1.7}
-            />
-          </div>
-
-          <div className="metric-value">
             {isLoading
-              ? "—"
+              ? "â€”"
               : formatCurrency(
                   totalSpending.toFixed(2),
                   transactions[0]?.currency ??
@@ -178,9 +249,11 @@ function Dashboard() {
                 )}
           </div>
 
-          <div className="metric-footer">
+          <div className="metric-footer positive">
+            <TrendingUp size={15} />
+
             <span>
-              {transactions.length} transactions loaded
+              {transactions.length} recorded transactions
             </span>
           </div>
         </article>
@@ -196,12 +269,39 @@ function Dashboard() {
           </div>
 
           <div className="metric-value">
-            {isLoading ? "—" : "07"}
+            {riskLoading
+              ? "â€”"
+              : riskActivityCount}
           </div>
 
           <div className="metric-footer warning">
             <span>
-              {reviewCount} require review
+              {riskLoading
+                ? "Evaluating risk"
+                : `${highRiskCount} high Â· ${reviewCount} review`}
+            </span>
+          </div>
+        </article>
+
+        <article className="metric-card reveal-card">
+          <div className="metric-header">
+            <span>Average risk score</span>
+
+            <ShieldAlert
+              size={19}
+              strokeWidth={1.7}
+            />
+          </div>
+
+          <div className="metric-value">
+            {riskLoading
+              ? "â€”"
+              : averageRiskScore}
+          </div>
+
+          <div className="metric-footer">
+            <span>
+              {riskTransactions.length} assessments
             </span>
           </div>
         </article>
@@ -218,7 +318,7 @@ function Dashboard() {
 
           <div className="metric-value">
             {isLoading
-              ? "—"
+              ? "â€”"
               : transactions.length}
           </div>
 
@@ -333,16 +433,20 @@ function Dashboard() {
 
           <div className="risk-score-block">
             <div className="risk-score">
-              72
+              {riskLoading
+                ? "â€”"
+                : averageRiskScore}
             </div>
 
             <div>
               <span className="risk-label">
-                Current risk index
+                Average risk index
               </span>
 
               <span className="risk-change">
-                ↑ 12% vs yesterday
+                {riskLoading
+                  ? "Evaluating transactions"
+                  : `${riskTransactions.length} assessments`}
               </span>
             </div>
           </div>
@@ -354,11 +458,20 @@ function Dashboard() {
 
                 High risk
 
-                <strong>{highRiskCount}</strong>
+                <strong>
+                  {riskLoading
+                    ? "â€”"
+                    : highRiskCount}
+                </strong>
               </div>
 
               <div className="risk-bar">
-                <span className="high-fill" />
+                <span
+                  className="high-fill"
+                  style={{
+                    width: highRiskWidth,
+                  }}
+                />
               </div>
             </div>
 
@@ -368,11 +481,20 @@ function Dashboard() {
 
                 Review
 
-                <strong>{reviewCount}</strong>
+                <strong>
+                  {riskLoading
+                    ? "â€”"
+                    : reviewCount}
+                </strong>
               </div>
 
               <div className="risk-bar">
-                <span className="medium-fill" />
+                <span
+                  className="medium-fill"
+                  style={{
+                    width: reviewWidth,
+                  }}
+                />
               </div>
             </div>
 
@@ -382,11 +504,20 @@ function Dashboard() {
 
                 Approved
 
-                <strong>{approvedCount}</strong>
+                <strong>
+                  {riskLoading
+                    ? "â€”"
+                    : approvedCount}
+                </strong>
               </div>
 
               <div className="risk-bar">
-                <span className="low-fill" />
+                <span
+                  className="low-fill"
+                  style={{
+                    width: approvedWidth,
+                  }}
+                />
               </div>
             </div>
           </div>
@@ -397,7 +528,7 @@ function Dashboard() {
         <div className="panel-header">
           <div>
             <span className="panel-kicker">
-              Live feed
+              Recent feed
             </span>
 
             <h3>Recent activity</h3>
@@ -406,7 +537,7 @@ function Dashboard() {
           <div className="stream-status">
             <span />
 
-            Event stream connected
+            API data synced
           </div>
         </div>
 
@@ -421,7 +552,7 @@ function Dashboard() {
 
           {isLoading ? (
             <div className="empty-state">
-              Loading transactions…
+              Loading transactionsâ€¦
             </div>
           ) : recentTransactions.length ===
             0 ? (
