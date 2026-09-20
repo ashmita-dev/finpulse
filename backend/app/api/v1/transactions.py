@@ -76,7 +76,19 @@ async def create_transaction_endpoint(
         historical_amounts=historical_amounts,
     )
 
-    result = create_transaction(transaction)
+    status_map = {
+        "APPROVE": "completed",
+        "REVIEW": "review",
+        "BLOCK": "blocked",
+    }
+
+    persisted_transaction = transaction.model_copy(
+        update={
+            "status": status_map[risk["decision"]],
+        }
+    )
+
+    result = create_transaction(persisted_transaction)
 
     create_risk_assessment(
         transaction_id=result[0],
