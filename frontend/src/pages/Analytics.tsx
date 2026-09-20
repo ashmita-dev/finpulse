@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   BarChart3,
   CreditCard,
@@ -6,7 +6,8 @@ import {
   Wallet,
 } from "lucide-react";
 
-import { useAppSelector } from "../app/hooks";
+import { getUserTransactions } from "../services/api";
+import type { Transaction } from "../types/transaction";
 
 function formatCurrency(
   amount: number,
@@ -20,34 +21,126 @@ function formatCurrency(
 }
 
 function Analytics() {
-  const {
-    items: transactions,
-    isLoading,
-    error,
-  } = useAppSelector((state) => state.transactions);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedCurrency, setSelectedCurrency] =
+    useState("INR");
 
-  const currency = transactions[0]?.currency ?? "INR";
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadTransactions() {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        const data = await getUserTransactions(1);
+
+        if (!mounted) {
+          return;
+        }
+
+        setTransactions(data);
+      } catch (requestError) {
+        if (!mounted) {
+          return;
+        }
+
+        setError(
+          requestError instanceof Error
+            ? requestError.message
+            : "Unable to load transaction data.",
+        );
+      } finally {
+        if (mounted) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    void loadTransactions();
+
+    const socket = new WebSocket(
+      "ws://127.0.0.1:8000/ws/transactions",
+    );
+
+    socket.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+
+        if (message.type === "transaction.created") {
+          void loadTransactions();
+        }
+      } catch {
+        if (mounted) {
+          setError(
+            "Received an invalid real-time update.",
+          );
+        }
+      }
+    };
+
+    socket.onerror = () => {
+      if (mounted) {
+        setError(
+          "Real-time transaction updates are unavailable.",
+        );
+      }
+    };
+
+    return () => {
+      mounted = false;
+      socket.close();
+    };
+  }, []);
+
+  const currencies = useMemo(() => {
+    return Array.from(
+      new Set(transactions.map((transaction) => transaction.currency)),
+    );
+  }, [transactions]);
+
+  useEffect(() => {
+    if (
+      currencies.length > 0 &&
+      !currencies.includes(selectedCurrency)
+    ) {
+      setSelectedCurrency(
+        currencies.includes("INR")
+          ? "INR"
+          : currencies[0],
+      );
+    }
+  }, [currencies, selectedCurrency]);
+
+  const currencyTransactions = useMemo(() => {
+    return transactions.filter(
+      (transaction) =>
+        transaction.currency === selectedCurrency,
+    );
+  }, [transactions, selectedCurrency]);
 
   const total = useMemo(() => {
-    return transactions.reduce(
+    return currencyTransactions.reduce(
       (sum, transaction) =>
         sum + Number(transaction.amount),
       0,
     );
-  }, [transactions]);
+  }, [currencyTransactions]);
 
   const averageTransaction = useMemo(() => {
-    if (transactions.length === 0) {
+    if (currencyTransactions.length === 0) {
       return 0;
     }
 
-    return total / transactions.length;
-  }, [total, transactions.length]);
+    return total / currencyTransactions.length;
+  }, [total, currencyTransactions.length]);
 
   const categoryTotals = useMemo(() => {
     const totals = new Map<string, number>();
 
-    for (const transaction of transactions) {
+    for (const transaction of currencyTransactions) {
       const current =
         totals.get(transaction.category) ?? 0;
 
@@ -60,10 +153,10 @@ function Analytics() {
     return Array.from(totals.entries()).sort(
       (a, b) => b[1] - a[1],
     );
-  }, [transactions]);
+  }, [currencyTransactions]);
 
   const largestTransaction = useMemo(() => {
-    return transactions.reduce(
+    return currencyTransactions.reduce(
       (largest, transaction) => {
         if (
           largest === null ||
@@ -75,9 +168,9 @@ function Analytics() {
 
         return largest;
       },
-      null as (typeof transactions)[number] | null,
+      null as Transaction | null,
     );
-  }, [transactions]);
+  }, [currencyTransactions]);
 
   const largestCategory = categoryTotals[0];
 
@@ -99,7 +192,7 @@ function Analytics() {
           <strong>
             {isLoading
               ? "Loading"
-              : `${transactions.length} records`}
+              : `${currencyTransactions.length} ${selectedCurrency} records`}
           </strong>
         </div>
       </div>
@@ -115,21 +208,44 @@ function Analytics() {
           <div className="metric-header">
             <span>Total spending</span>
 
-            <Wallet
-              size={19}
-              strokeWidth={1.7}
-            />
+            <div className="metric-header-actions">
+              <select
+                value={selectedCurrency}
+                onChange={(event) =>
+                  setSelectedCurrency(event.target.value)
+                }
+                aria-label="Analytics currency"
+              >
+                {currencies.length > 0 ? (
+                  currencies.map((currency) => (
+                    <option
+                      key={currency}
+                      value={currency}
+                    >
+                      {currency}
+                    </option>
+                  ))
+                ) : (
+                  <option value="INR">INR</option>
+                )}
+              </select>
+
+              <Wallet
+                size={19}
+                strokeWidth={1.7}
+              />
+            </div>
           </div>
 
           <div className="metric-value">
             {isLoading
               ? "—"
-              : formatCurrency(total, currency)}
+              : formatCurrency(total, selectedCurrency)}
           </div>
 
           <div className="metric-footer">
             <span>
-              {transactions.length} transactions
+              {currencyTransactions.length} transactions
             </span>
           </div>
         </article>
@@ -149,12 +265,12 @@ function Analytics() {
               ? "—"
               : formatCurrency(
                   averageTransaction,
-                  currency,
+                  selectedCurrency,
                 )}
           </div>
 
           <div className="metric-footer">
-            <span>Across recorded activity</span>
+            <span>Across selected currency</span>
           </div>
         </article>
 
@@ -197,7 +313,10 @@ function Analytics() {
                     Number(largestTransaction.amount),
                     largestTransaction.currency,
                   )
-                : formatCurrency(0, currency)}
+                : formatCurrency(
+                    0,
+                    selectedCurrency,
+                  )}
           </div>
 
           <div className="metric-footer">
@@ -260,7 +379,7 @@ function Analytics() {
                         <strong>
                           {formatCurrency(
                             amount,
-                            currency,
+                            selectedCurrency,
                           )}
                         </strong>
                       </div>
@@ -312,7 +431,7 @@ function Analytics() {
                 {largestCategory
                   ? formatCurrency(
                       largestCategory[1],
-                      currency,
+                      selectedCurrency,
                     )
                   : "No data available"}
               </span>
@@ -330,7 +449,9 @@ function Analytics() {
               <span>
                 {largestTransaction
                   ? formatCurrency(
-                      Number(largestTransaction.amount),
+                      Number(
+                        largestTransaction.amount,
+                      ),
                       largestTransaction.currency,
                     )
                   : "No data available"}
@@ -347,12 +468,12 @@ function Analytics() {
                   ? "—"
                   : formatCurrency(
                       averageTransaction,
-                      currency,
+                      selectedCurrency,
                     )}
               </strong>
 
               <span>
-                Based on recorded activity
+                Based on selected currency
               </span>
             </div>
           </div>
@@ -395,9 +516,10 @@ function Analytics() {
             categoryTotals.map(
               ([category, amount]) => {
                 const transactionCount =
-                  transactions.filter(
+                  currencyTransactions.filter(
                     (transaction) =>
-                      transaction.category === category,
+                      transaction.category ===
+                      category,
                   ).length;
 
                 const percentage =
@@ -417,7 +539,7 @@ function Analytics() {
                     <strong>
                       {formatCurrency(
                         amount,
-                        currency,
+                        selectedCurrency,
                       )}
                     </strong>
 
