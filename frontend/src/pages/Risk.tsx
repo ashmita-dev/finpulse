@@ -9,6 +9,8 @@ import {
 import { getUserRiskTransactions } from "../services/api";
 import type { TransactionWithRisk } from "../types/transaction";
 
+type RiskAction = "APPROVE" | "REVIEW" | "BLOCK";
+
 function formatCurrency(
   amount: string,
   currency: string,
@@ -42,6 +44,12 @@ function Risk() {
 
   const [error, setError] = useState<string | null>(null);
 
+  const [actionLoading, setActionLoading] =
+    useState<RiskAction | null>(null);
+
+  const [actionMessage, setActionMessage] =
+    useState<string | null>(null);
+
   const loadRiskData = useCallback(async () => {
     try {
       setIsLoading(true);
@@ -52,7 +60,20 @@ function Risk() {
       setTransactions(data);
 
       if (data.length > 0) {
-        setSelectedTransaction(data[0]);
+        setSelectedTransaction((current) => {
+          if (!current) {
+            return data[0];
+          }
+
+          return (
+            data.find(
+              (transaction) =>
+                transaction.id === current.id,
+            ) ?? data[0]
+          );
+        });
+      } else {
+        setSelectedTransaction(null);
       }
     } catch (requestError) {
       setError(
@@ -87,7 +108,10 @@ function Risk() {
           message,
         );
 
-        if (message.type === "transaction.created") {
+        if (
+          message.type === "transaction.created" ||
+          message.type === "risk.action.updated"
+        ) {
           void loadRiskData();
         }
       } catch {
@@ -159,6 +183,54 @@ function Risk() {
     return Math.round(total / transactions.length);
   }, [transactions]);
 
+  const applyAction = async (action: RiskAction) => {
+    if (!selectedTransaction) {
+      return;
+    }
+
+    try {
+      setActionLoading(action);
+      setActionMessage(null);
+      setError(null);
+
+      const response = await fetch(
+        `http://127.0.0.1:8000/api/v1/transactions/${selectedTransaction.id}/decision`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            decision: action,
+          }),
+        },
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data?.detail ??
+            `Unable to apply ${action.toLowerCase()} action.`,
+        );
+      }
+
+      setActionMessage(
+        `${action} action applied to ${selectedTransaction.merchant}.`,
+      );
+
+      await loadRiskData();
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to update transaction decision.",
+      );
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   return (
     <>
       <div className="intro-row">
@@ -185,6 +257,14 @@ function Risk() {
           <ShieldAlert size={16} />
 
           <span>{error}</span>
+        </div>
+      )}
+
+      {actionMessage && (
+        <div className="success-banner">
+          <CheckCircle2 size={16} />
+
+          <span>{actionMessage}</span>
         </div>
       )}
 
@@ -482,6 +562,79 @@ function Risk() {
                     ),
                   )
                 )}
+              </div>
+
+              <div className="risk-actions">
+                <div className="risk-signals-heading">
+                  <span>Risk operations</span>
+
+                  <strong>Manual decision</strong>
+                </div>
+
+                <div className="risk-action-buttons">
+                  <button
+                    type="button"
+                    className={`risk-action-button ${
+                      selectedTransaction.risk.decision ===
+                      "APPROVE"
+                        ? "active"
+                        : ""
+                    }`}
+                    onClick={() =>
+                      void applyAction("APPROVE")
+                    }
+                    disabled={actionLoading !== null}
+                  >
+                    <CheckCircle2 size={15} />
+                    <span>
+                      {actionLoading === "APPROVE"
+                        ? "Approving..."
+                        : "Approve"}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className={`risk-action-button ${
+                      selectedTransaction.risk.decision ===
+                      "REVIEW"
+                        ? "active"
+                        : ""
+                    }`}
+                    onClick={() =>
+                      void applyAction("REVIEW")
+                    }
+                    disabled={actionLoading !== null}
+                  >
+                    <AlertTriangle size={15} />
+                    <span>
+                      {actionLoading === "REVIEW"
+                        ? "Reviewing..."
+                        : "Review"}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    className={`risk-action-button ${
+                      selectedTransaction.risk.decision ===
+                      "BLOCK"
+                        ? "active"
+                        : ""
+                    }`}
+                    onClick={() =>
+                      void applyAction("BLOCK")
+                    }
+                    disabled={actionLoading !== null}
+                  >
+                    <Ban size={15} />
+                    <span>
+                      {actionLoading === "BLOCK"
+                        ? "Blocking..."
+                        : "Block"}
+                    </span>
+                  </button>
+                </div>
               </div>
             </div>
           ) : (

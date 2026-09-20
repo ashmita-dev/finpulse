@@ -1,6 +1,10 @@
+from typing import Literal
+
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
+from pydantic import BaseModel
 
+from app.repositories.risk_actions import apply_risk_action
 from app.repositories.transactions import (
     count_recent_transactions,
     create_risk_assessment,
@@ -20,6 +24,10 @@ from app.schemas.transaction import (
 )
 
 router = APIRouter()
+
+
+class RiskActionRequest(BaseModel):
+    decision: Literal["APPROVE", "REVIEW", "BLOCK"]
 
 
 def transaction_to_response(result):
@@ -86,6 +94,47 @@ async def create_transaction_endpoint(
     websocket_payload = jsonable_encoder(
         {
             "type": "transaction.created",
+            "data": response,
+        }
+    )
+
+    await request.app.state.connection_manager.broadcast(
+        websocket_payload
+    )
+
+    return response
+
+
+@router.patch(
+    "/transactions/{transaction_id}/decision",
+    response_model=TransactionWithRiskResponse,
+)
+async def update_transaction_decision(
+    transaction_id: int,
+    action: RiskActionRequest,
+    request: Request,
+):
+    result = apply_risk_action(
+        transaction_id=transaction_id,
+        decision=action.decision,
+    )
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Risk assessment not found for transaction.",
+        )
+
+    transaction, risk = result
+
+    response = transaction_with_risk_to_response(
+        transaction,
+        risk,
+    )
+
+    websocket_payload = jsonable_encoder(
+        {
+            "type": "risk.action.updated",
             "data": response,
         }
     )
