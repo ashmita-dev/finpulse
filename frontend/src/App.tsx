@@ -955,24 +955,88 @@ function App() {
   );
 
   useEffect(() => {
+    const loadExistingNotifications = async () => {
+      try {
+        const response = await fetch(
+          "http://127.0.0.1:8000/api/v1/users/1/risk",
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            `Failed to load risk assessments: ${response.status}`,
+          );
+        }
+
+        const transactions = await response.json();
+
+        const existingNotifications: NotificationItem[] =
+          transactions
+            .filter((transaction: any) => {
+              const risk = transaction?.risk;
+
+              if (!risk) {
+                return false;
+              }
+
+              const riskLevel = String(
+                risk.risk_level ?? "",
+              ).toUpperCase();
+
+              const decision = String(
+                risk.decision ?? "",
+              ).toUpperCase();
+
+              return (
+                riskLevel === "HIGH" ||
+                decision === "BLOCK"
+              );
+            })
+            .map((transaction: any) => {
+              const riskLevel = String(
+                transaction.risk.risk_level ?? "",
+              ).toUpperCase();
+
+              seenNotificationIds.current.add(
+                String(transaction.id),
+              );
+
+              return {
+                id: String(transaction.id),
+                title:
+                  "High-risk transaction detected",
+                message: `${transaction.merchant} triggered a ${riskLevel.toLowerCase()} risk alert.`,
+                riskLevel,
+                createdAt:
+                  transaction.timestamp,
+              };
+            })
+            .slice(0, 10);
+
+        setNotifications(existingNotifications);
+        setUnreadCount(0);
+      } catch (error) {
+        console.error(
+          "Unable to load existing notifications:",
+          error,
+        );
+      }
+    };
+
+    void loadExistingNotifications();
+
     const socket = new WebSocket(
       "ws://127.0.0.1:8000/ws/transactions",
     );
 
     socket.onopen = () => {
       console.log(
-        "✅ Notification WebSocket connected",
+        "Notification WebSocket connected",
       );
     };
 
     socket.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data);
-
-        console.log(
-          "📩 Notification WebSocket message:",
-          message,
-        );
 
         if (
           message.type !==
@@ -984,22 +1048,7 @@ function App() {
         const transaction = message.data;
         const risk = transaction?.risk;
 
-        console.log(
-          "🔍 Notification transaction:",
-          transaction,
-        );
-
-        console.log(
-          "🔍 Notification risk:",
-          risk,
-        );
-
         if (!transaction || !risk) {
-          console.warn(
-            "⚠️ Missing transaction or risk data:",
-            message,
-          );
-
           return;
         }
 
@@ -1014,15 +1063,6 @@ function App() {
         const isHighRisk =
           riskLevel === "HIGH" ||
           decision === "BLOCK";
-
-        console.log(
-          "🚨 Risk notification check:",
-          {
-            riskLevel,
-            decision,
-            isHighRisk,
-          },
-        );
 
         if (!isHighRisk) {
           return;
@@ -1053,6 +1093,7 @@ function App() {
               message: `${transaction.merchant} triggered a ${riskLevel.toLowerCase()} risk alert.`,
               riskLevel,
               createdAt:
+                transaction.timestamp ??
                 new Date().toISOString(),
             },
             ...current,
@@ -1064,26 +1105,26 @@ function App() {
         );
 
         console.log(
-          "🔔 Notification added successfully",
+          "High-risk notification added",
         );
-      } catch (notificationError) {
+      } catch (error) {
         console.error(
-          "❌ Unable to process notification update:",
-          notificationError,
+          "Unable to process notification update:",
+          error,
         );
       }
     };
 
-    socket.onerror = (socketError) => {
+    socket.onerror = (error) => {
       console.error(
         "Notification WebSocket error:",
-        socketError,
+        error,
       );
     };
 
     socket.onclose = (event) => {
       console.log(
-        "🔌 Notification WebSocket disconnected:",
+        "Notification WebSocket disconnected:",
         event.code,
         event.reason,
       );
