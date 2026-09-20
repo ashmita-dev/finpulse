@@ -194,9 +194,7 @@ function Analytics() {
               ? "—"
               : largestTransaction
                 ? formatCurrency(
-                    Number(
-                      largestTransaction.amount,
-                    ),
+                    Number(largestTransaction.amount),
                     largestTransaction.currency,
                   )
                 : formatCurrency(0, currency)}
@@ -251,9 +249,7 @@ function Analytics() {
                     >
                       <div className="category-heading">
                         <div>
-                          <strong>
-                            {category}
-                          </strong>
+                          <strong>{category}</strong>
 
                           <span>
                             {percentage.toFixed(1)}%
@@ -328,16 +324,13 @@ function Analytics() {
               </span>
 
               <strong>
-                {largestTransaction?.merchant ??
-                  "—"}
+                {largestTransaction?.merchant ?? "—"}
               </strong>
 
               <span>
                 {largestTransaction
                   ? formatCurrency(
-                      Number(
-                        largestTransaction.amount,
-                      ),
+                      Number(largestTransaction.amount),
                       largestTransaction.currency,
                     )
                   : "No data available"}
@@ -404,8 +397,7 @@ function Analytics() {
                 const transactionCount =
                   transactions.filter(
                     (transaction) =>
-                      transaction.category ===
-                      category,
+                      transaction.category === category,
                   ).length;
 
                 const percentage =
@@ -420,9 +412,7 @@ function Analytics() {
                   >
                     <strong>{category}</strong>
 
-                    <span>
-                      {transactionCount}
-                    </span>
+                    <span>{transactionCount}</span>
 
                     <strong>
                       {formatCurrency(

@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Activity,
   BarChart3,
@@ -26,7 +32,9 @@ import {
   fetchUserTransactions,
 } from "./features/transactions/transactionsSlice";
 import { getUserRiskTransactions } from "./services/api";
-import type { TransactionWithRisk } from "./types/transaction";
+import type {
+  TransactionWithRisk,
+} from "./types/transaction";
 import Transactions from "./pages/Transactions";
 import Risk from "./pages/Risk";
 import Analytics from "./pages/Analytics";
@@ -52,6 +60,13 @@ const navigation = [
     path: "/analytics",
     icon: BarChart3,
   },
+];
+
+const currencyOptions = [
+  "INR",
+  "USD",
+  "EUR",
+  "GBP",
 ];
 
 function formatCurrency(
@@ -92,37 +107,115 @@ function Dashboard() {
   const [riskError, setRiskError] =
     useState<string | null>(null);
 
-  useEffect(() => {
-    async function loadRiskData() {
-      try {
-        setRiskLoading(true);
-        setRiskError(null);
+  const [selectedCurrency, setSelectedCurrency] =
+    useState("INR");
 
-        const data =
-          await getUserRiskTransactions(1);
+  const dispatch = useAppDispatch();
 
-        setRiskTransactions(data);
-      } catch (requestError) {
-        setRiskError(
-          requestError instanceof Error
-            ? requestError.message
-            : "Unable to load risk data.",
-        );
-      } finally {
-        setRiskLoading(false);
-      }
+  const loadRiskData = useCallback(async () => {
+    try {
+      setRiskLoading(true);
+      setRiskError(null);
+
+      const data = await getUserRiskTransactions(1);
+
+      setRiskTransactions(data);
+    } catch (requestError) {
+      setRiskError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to load risk data.",
+      );
+    } finally {
+      setRiskLoading(false);
     }
-
-    loadRiskData();
   }, []);
 
+  useEffect(() => {
+    void dispatch(fetchUserTransactions(1));
+  }, [dispatch]);
+
+  useEffect(() => {
+    void loadRiskData();
+  }, [loadRiskData]);
+
+  useEffect(() => {
+    const socket = new WebSocket(
+      "ws://127.0.0.1:8000/ws/transactions",
+    );
+
+    socket.onopen = () => {
+      console.log("✅ WebSocket connected");
+
+      setRiskError(null);
+    };
+
+    socket.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+
+        console.log(
+          "📩 WebSocket message received:",
+          message,
+        );
+
+        if (message.type === "transaction.created") {
+          void dispatch(
+            fetchUserTransactions(1),
+          );
+
+          void loadRiskData();
+        }
+      } catch {
+        console.error(
+          "❌ Invalid WebSocket message:",
+          event.data,
+        );
+
+        setRiskError(
+          "Received an invalid real-time update.",
+        );
+      }
+    };
+
+    socket.onerror = (socketError) => {
+      console.error(
+        "❌ WebSocket error:",
+        socketError,
+      );
+
+      setRiskError(
+        "Real-time transaction updates are unavailable.",
+      );
+    };
+
+    socket.onclose = (event) => {
+      console.log(
+        "🔌 WebSocket disconnected:",
+        event.code,
+        event.reason,
+      );
+    };
+
+    return () => {
+      socket.close();
+    };
+  }, [dispatch, loadRiskData]);
+
+  const currencyTransactions = useMemo(() => {
+    return transactions.filter(
+      (transaction) =>
+        transaction.currency === selectedCurrency,
+    );
+  }, [transactions, selectedCurrency]);
+
   const totalSpending = useMemo(() => {
-    return transactions.reduce(
+    return currencyTransactions.reduce(
       (total, transaction) =>
         total + Number(transaction.amount),
       0,
     );
-  }, [transactions]);
+  }, [currencyTransactions]);
 
   const highRiskCount = useMemo(() => {
     return riskTransactions.filter(
@@ -185,6 +278,147 @@ function Dashboard() {
       ? `${(approvedCount / totalRiskTransactions) * 100}%`
       : "0%";
 
+  const spendingChart = useMemo(() => {
+    const dateKey = (date: Date) => {
+      const year = date.getFullYear();
+
+      const month = String(
+        date.getMonth() + 1,
+      ).padStart(2, "0");
+
+      const day = String(
+        date.getDate(),
+      ).padStart(2, "0");
+
+      return `${year}-${month}-${day}`;
+    };
+
+    const latestTimestamp =
+      currencyTransactions.reduce(
+        (latest, transaction) => {
+          const timestamp = new Date(
+            transaction.timestamp,
+          ).getTime();
+
+          return timestamp > latest
+            ? timestamp
+            : latest;
+        },
+        0,
+      );
+
+    const anchorDate = new Date(
+      latestTimestamp || Date.now(),
+    );
+
+    const dailySpending = new Map<
+      string,
+      number
+    >();
+
+    currencyTransactions.forEach(
+      (transaction) => {
+        const key = dateKey(
+          new Date(transaction.timestamp),
+        );
+
+        dailySpending.set(
+          key,
+          (dailySpending.get(key) ?? 0) +
+            Number(transaction.amount),
+        );
+      },
+    );
+
+    const dates = Array.from(
+      { length: 7 },
+      (_, index) => {
+        const date = new Date(anchorDate);
+
+        date.setHours(0, 0, 0, 0);
+
+        date.setDate(
+          anchorDate.getDate() -
+            (6 - index),
+        );
+
+        return date;
+      },
+    );
+
+    const values = dates.map(
+      (date) =>
+        dailySpending.get(dateKey(date)) ??
+        0,
+    );
+
+    const maxValue = Math.max(
+      ...values,
+      1,
+    );
+
+    const width = 760;
+    const baseline = 205;
+    const chartHeight = 165;
+
+    const points = values.map(
+      (value, index) => {
+        const x =
+          values.length === 1
+            ? width
+            : (index /
+                (values.length - 1)) *
+              width;
+
+        const y =
+          baseline -
+          (value / maxValue) *
+            chartHeight;
+
+        return {
+          x,
+          y,
+        };
+      },
+    );
+
+    const linePath = points
+      .map((point, index) => {
+        const command =
+          index === 0 ? "M" : "L";
+
+        return `${command}${point.x.toFixed(
+          2,
+        )},${point.y.toFixed(2)}`;
+      })
+      .join(" ");
+
+    const areaPath =
+      `${linePath} L${width},230 L0,230 Z`;
+
+    const labels = dates.map(
+      (date) =>
+        new Intl.DateTimeFormat("en-IN", {
+          day: "2-digit",
+          month: "short",
+        }).format(date),
+    );
+
+    const lastPoint =
+      points[points.length - 1] ?? {
+        x: width,
+        y: baseline,
+      };
+
+    return {
+      labels,
+      linePath,
+      areaPath,
+      lastPoint,
+      hasData: currencyTransactions.length > 0,
+    };
+  }, [currencyTransactions]);
+
   return (
     <>
       <div className="intro-row page-intro">
@@ -230,22 +464,69 @@ function Dashboard() {
 
       <section className="metrics-grid">
         <article className="metric-card primary reveal-card">
-          <div className="metric-header">
+          <div
+            className="metric-header"
+            style={{
+              alignItems: "center",
+            }}
+          >
             <span>Tracked spending</span>
 
-            <Wallet
-              size={19}
-              strokeWidth={1.7}
-            />
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+              }}
+            >
+              <select
+                value={selectedCurrency}
+                onChange={(event) =>
+                  setSelectedCurrency(
+                    event.target.value,
+                  )
+                }
+                aria-label="Spending currency"
+                style={{
+                  border:
+                    "1px solid #dfe7e3",
+                  borderRadius: 8,
+                  padding:
+                    "5px 8px",
+                  background:
+                    "rgba(255,255,255,0.8)",
+                  color: "#26342f",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  outline: "none",
+                  cursor: "pointer",
+                }}
+              >
+                {currencyOptions.map(
+                  (currency) => (
+                    <option
+                      key={currency}
+                      value={currency}
+                    >
+                      {currency}
+                    </option>
+                  ),
+                )}
+              </select>
+
+              <Wallet
+                size={19}
+                strokeWidth={1.7}
+              />
+            </div>
           </div>
 
           <div className="metric-value">
             {isLoading
-              ? "â€”"
+              ? "—"
               : formatCurrency(
                   totalSpending.toFixed(2),
-                  transactions[0]?.currency ??
-                    "INR",
+                  selectedCurrency,
                 )}
           </div>
 
@@ -253,7 +534,8 @@ function Dashboard() {
             <TrendingUp size={15} />
 
             <span>
-              {transactions.length} recorded transactions
+              {currencyTransactions.length}{" "}
+              {selectedCurrency} transactions
             </span>
           </div>
         </article>
@@ -270,7 +552,7 @@ function Dashboard() {
 
           <div className="metric-value">
             {riskLoading
-              ? "â€”"
+              ? "—"
               : riskActivityCount}
           </div>
 
@@ -278,7 +560,7 @@ function Dashboard() {
             <span>
               {riskLoading
                 ? "Evaluating risk"
-                : `${highRiskCount} high Â· ${reviewCount} review`}
+                : `${highRiskCount} high · ${reviewCount} review`}
             </span>
           </div>
         </article>
@@ -295,7 +577,7 @@ function Dashboard() {
 
           <div className="metric-value">
             {riskLoading
-              ? "â€”"
+              ? "—"
               : averageRiskScore}
           </div>
 
@@ -318,7 +600,7 @@ function Dashboard() {
 
           <div className="metric-value">
             {isLoading
-              ? "â€”"
+              ? "—"
               : transactions.length}
           </div>
 
@@ -336,7 +618,10 @@ function Dashboard() {
                 Cash flow
               </span>
 
-              <h3>Spending trajectory</h3>
+              <h3>
+                Spending trajectory ·{" "}
+                {selectedCurrency}
+              </h3>
             </div>
 
             <button
@@ -357,59 +642,80 @@ function Dashboard() {
               <span />
             </div>
 
-            <svg
-              className="spending-chart"
-              viewBox="0 0 760 230"
-              preserveAspectRatio="none"
-              aria-label="Spending trajectory"
-            >
-              <defs>
-                <linearGradient
-                  id="areaGradient"
-                  x1="0"
-                  y1="0"
-                  x2="0"
-                  y2="1"
+            {spendingChart.hasData ? (
+              <>
+                <svg
+                  className="spending-chart"
+                  viewBox="0 0 760 230"
+                  preserveAspectRatio="none"
+                  aria-label={`${selectedCurrency} spending trajectory`}
                 >
-                  <stop
-                    offset="0%"
-                    stopColor="rgba(42, 213, 164, 0.18)"
+                  <defs>
+                    <linearGradient
+                      id="areaGradient"
+                      x1="0"
+                      y1="0"
+                      x2="0"
+                      y2="1"
+                    >
+                      <stop
+                        offset="0%"
+                        stopColor="rgba(42, 213, 164, 0.18)"
+                      />
+
+                      <stop
+                        offset="100%"
+                        stopColor="rgba(42, 213, 164, 0)"
+                      />
+                    </linearGradient>
+                  </defs>
+
+                  <path
+                    className="chart-area"
+                    d={
+                      spendingChart.areaPath
+                    }
                   />
 
-                  <stop
-                    offset="100%"
-                    stopColor="rgba(42, 213, 164, 0)"
+                  <path
+                    className="chart-line"
+                    d={
+                      spendingChart.linePath
+                    }
                   />
-                </linearGradient>
-              </defs>
 
-              <path
-                className="chart-area"
-                d="M0,170 C70,150 95,158 150,130 C210,100 235,130 290,112 C345,92 365,110 420,82 C480,50 500,96 555,76 C620,52 650,70 700,42 C725,28 745,38 760,25 L760,230 L0,230 Z"
-              />
+                  <circle
+                    cx={
+                      spendingChart.lastPoint
+                        .x
+                    }
+                    cy={
+                      spendingChart.lastPoint
+                        .y
+                    }
+                    r="5"
+                    className="chart-point"
+                  />
+                </svg>
 
-              <path
-                className="chart-line"
-                d="M0,170 C70,150 95,158 150,130 C210,100 235,130 290,112 C345,92 365,110 420,82 C480,50 500,96 555,76 C620,52 650,70 700,42 C725,28 745,38 760,25"
-              />
-
-              <circle
-                cx="760"
-                cy="25"
-                r="5"
-                className="chart-point"
-              />
-            </svg>
-
-            <div className="chart-labels">
-              <span>30 Aug</span>
-              <span>31 Aug</span>
-              <span>01 Sep</span>
-              <span>02 Sep</span>
-              <span>03 Sep</span>
-              <span>04 Sep</span>
-              <span>05 Sep</span>
-            </div>
+                <div className="chart-labels">
+                  {spendingChart.labels.map(
+                    (label, index) => (
+                      <span
+                        key={`${label}-${index}`}
+                      >
+                        {label}
+                      </span>
+                    ),
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="empty-state">
+                No {selectedCurrency} transactions
+                available for the spending chart.
+              </div>
+            )}
           </div>
         </article>
 
@@ -434,7 +740,7 @@ function Dashboard() {
           <div className="risk-score-block">
             <div className="risk-score">
               {riskLoading
-                ? "â€”"
+                ? "—"
                 : averageRiskScore}
             </div>
 
@@ -460,7 +766,7 @@ function Dashboard() {
 
                 <strong>
                   {riskLoading
-                    ? "â€”"
+                    ? "—"
                     : highRiskCount}
                 </strong>
               </div>
@@ -483,7 +789,7 @@ function Dashboard() {
 
                 <strong>
                   {riskLoading
-                    ? "â€”"
+                    ? "—"
                     : reviewCount}
                 </strong>
               </div>
@@ -506,7 +812,7 @@ function Dashboard() {
 
                 <strong>
                   {riskLoading
-                    ? "â€”"
+                    ? "—"
                     : approvedCount}
                 </strong>
               </div>
@@ -552,12 +858,13 @@ function Dashboard() {
 
           {isLoading ? (
             <div className="empty-state">
-              Loading transactionsâ€¦
+              Loading transactions…
             </div>
           ) : recentTransactions.length ===
             0 ? (
             <div className="empty-state">
-              No transactions found for this user.
+              No transactions found for this
+              user.
             </div>
           ) : (
             recentTransactions.map(
@@ -625,12 +932,167 @@ function Dashboard() {
   );
 }
 
+type NotificationItem = {
+  id: string;
+  title: string;
+  message: string;
+  riskLevel: string;
+  createdAt: string;
+};
+
 function App() {
-  const dispatch = useAppDispatch();
+  const [notifications, setNotifications] =
+    useState<NotificationItem[]>([]);
+
+  const [notificationsOpen, setNotificationsOpen] =
+    useState(false);
+
+  const [unreadCount, setUnreadCount] =
+    useState(0);
+
+  const seenNotificationIds = useRef<Set<string>>(
+    new Set(),
+  );
 
   useEffect(() => {
-    dispatch(fetchUserTransactions(1));
-  }, [dispatch]);
+    const socket = new WebSocket(
+      "ws://127.0.0.1:8000/ws/transactions",
+    );
+
+    socket.onopen = () => {
+      console.log(
+        "✅ Notification WebSocket connected",
+      );
+    };
+
+    socket.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+
+        console.log(
+          "📩 Notification WebSocket message:",
+          message,
+        );
+
+        if (
+          message.type !==
+          "transaction.created"
+        ) {
+          return;
+        }
+
+        const transaction = message.data;
+        const risk = transaction?.risk;
+
+        console.log(
+          "🔍 Notification transaction:",
+          transaction,
+        );
+
+        console.log(
+          "🔍 Notification risk:",
+          risk,
+        );
+
+        if (!transaction || !risk) {
+          console.warn(
+            "⚠️ Missing transaction or risk data:",
+            message,
+          );
+
+          return;
+        }
+
+        const riskLevel = String(
+          risk.risk_level ?? "",
+        ).toUpperCase();
+
+        const decision = String(
+          risk.decision ?? "",
+        ).toUpperCase();
+
+        const isHighRisk =
+          riskLevel === "HIGH" ||
+          decision === "BLOCK";
+
+        console.log(
+          "🚨 Risk notification check:",
+          {
+            riskLevel,
+            decision,
+            isHighRisk,
+          },
+        );
+
+        if (!isHighRisk) {
+          return;
+        }
+
+        const notificationId = String(
+          transaction.id,
+        );
+
+        if (
+          seenNotificationIds.current.has(
+            notificationId,
+          )
+        ) {
+          return;
+        }
+
+        seenNotificationIds.current.add(
+          notificationId,
+        );
+
+        setNotifications((current) =>
+          [
+            {
+              id: notificationId,
+              title:
+                "High-risk transaction detected",
+              message: `${transaction.merchant} triggered a ${riskLevel.toLowerCase()} risk alert.`,
+              riskLevel,
+              createdAt:
+                new Date().toISOString(),
+            },
+            ...current,
+          ].slice(0, 10),
+        );
+
+        setUnreadCount(
+          (count) => count + 1,
+        );
+
+        console.log(
+          "🔔 Notification added successfully",
+        );
+      } catch (notificationError) {
+        console.error(
+          "❌ Unable to process notification update:",
+          notificationError,
+        );
+      }
+    };
+
+    socket.onerror = (socketError) => {
+      console.error(
+        "Notification WebSocket error:",
+        socketError,
+      );
+    };
+
+    socket.onclose = (event) => {
+      console.log(
+        "🔌 Notification WebSocket disconnected:",
+        event.code,
+        event.reason,
+      );
+    };
+
+    return () => {
+      socket.close();
+    };
+  }, []);
 
   return (
     <div className="app-shell">
@@ -737,21 +1199,120 @@ function App() {
           <div className="topbar-actions">
             <div className="live-indicator">
               <span className="live-dot" />
+
               LIVE
             </div>
 
-            <button
-              className="icon-button"
-              aria-label="Notifications"
-              type="button"
+            <div
+              style={{
+                position: "relative",
+              }}
             >
-              <Bell
-                size={19}
-                strokeWidth={1.8}
-              />
+              <button
+                className="icon-button"
+                aria-label="Notifications"
+                type="button"
+                onClick={() => {
+                  setNotificationsOpen(
+                    (open) => !open,
+                  );
 
-              <span className="notification-dot" />
-            </button>
+                  setUnreadCount(0);
+                }}
+              >
+                <Bell
+                  size={19}
+                  strokeWidth={1.8}
+                />
+
+                {unreadCount > 0 && (
+                  <span className="notification-dot" />
+                )}
+              </button>
+
+              {notificationsOpen && (
+                <div
+                  style={{
+                    position: "absolute",
+                    right: 0,
+                    top: "calc(100% + 12px)",
+                    width: 320,
+                    maxWidth:
+                      "calc(100vw - 32px)",
+                    background: "white",
+                    border:
+                      "1px solid #dfe7e3",
+                    borderRadius: 14,
+                    padding: 16,
+                    boxShadow:
+                      "0 14px 40px rgba(0,0,0,0.12)",
+                    zIndex: 20,
+                  }}
+                >
+                  <strong
+                    style={{
+                      display: "block",
+                      marginBottom: 12,
+                    }}
+                  >
+                    Notifications
+                  </strong>
+
+                  {notifications.length ===
+                  0 ? (
+                    <p
+                      style={{
+                        margin: 0,
+                        color: "#718078",
+                        fontSize: 14,
+                      }}
+                    >
+                      No high-risk alerts yet.
+                    </p>
+                  ) : (
+                    notifications.map(
+                      (notification) => (
+                        <div
+                          key={notification.id}
+                          style={{
+                            borderTop:
+                              "1px solid #edf1ef",
+                            paddingTop: 12,
+                            marginTop: 12,
+                          }}
+                        >
+                          <strong
+                            style={{
+                              display: "block",
+                              color: "#c24141",
+                              fontSize: 14,
+                            }}
+                          >
+                            {
+                              notification.title
+                            }
+                          </strong>
+
+                          <p
+                            style={{
+                              margin:
+                                "6px 0 0",
+                              color: "#596861",
+                              fontSize: 13,
+                              lineHeight: 1.5,
+                            }}
+                          >
+                            {
+                              notification.message
+                            }
+                          </p>
+                        </div>
+                      ),
+                    )
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </header>
 

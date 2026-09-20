@@ -12,8 +12,19 @@ import {
   X,
 } from "lucide-react";
 
-import { useAppSelector } from "../app/hooks";
-import { createTransaction, getUserRiskTransactions } from "../services/api";
+import {
+  useAppDispatch,
+  useAppSelector,
+} from "../app/hooks";
+
+import {
+  fetchUserTransactions,
+} from "../features/transactions/transactionsSlice";
+
+import {
+  createTransaction,
+  getUserRiskTransactions,
+} from "../services/api";
 import type {
   Transaction,
   TransactionWithRisk,
@@ -62,6 +73,7 @@ function getRiskColor(level: string) {
 }
 
 function Transactions() {
+  const dispatch = useAppDispatch();
   const {
     items: transactions,
     isLoading,
@@ -137,11 +149,8 @@ function Transactions() {
       });
 
       setCreatedRisk(result);
-      setForm((current) => ({
-        ...current,
-        amount: "",
-        merchant: "",
-      }));
+
+      await dispatch(fetchUserTransactions(1));
     } catch (err) {
       setCreateError(
         err instanceof Error
@@ -1346,7 +1355,7 @@ function Transactions() {
                       fontSize: "9px",
                     }}
                   >
-                    Loadingâ€¦
+                    Loading…
                   </span>
                 )}
               </div>

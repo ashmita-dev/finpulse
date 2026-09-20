@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   Ban,
@@ -42,32 +42,81 @@ function Risk() {
 
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function loadRiskData() {
-      try {
-        setIsLoading(true);
-        setError(null);
+  const loadRiskData = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
 
-        const data = await getUserRiskTransactions(1);
+      const data = await getUserRiskTransactions(1);
 
-        setTransactions(data);
+      setTransactions(data);
 
-        if (data.length > 0) {
-          setSelectedTransaction(data[0]);
-        }
-      } catch (requestError) {
-        setError(
-          requestError instanceof Error
-            ? requestError.message
-            : "Unable to load risk data.",
-        );
-      } finally {
-        setIsLoading(false);
+      if (data.length > 0) {
+        setSelectedTransaction(data[0]);
       }
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to load risk data.",
+      );
+    } finally {
+      setIsLoading(false);
     }
-
-    loadRiskData();
   }, []);
+
+  useEffect(() => {
+    void loadRiskData();
+  }, [loadRiskData]);
+
+  useEffect(() => {
+    const socket = new WebSocket(
+      "ws://127.0.0.1:8000/ws/transactions",
+    );
+
+    socket.onopen = () => {
+      console.log("✅ Risk Monitor WebSocket connected");
+    };
+
+    socket.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+
+        console.log(
+          "📩 Risk Monitor WebSocket message received:",
+          message,
+        );
+
+        if (message.type === "transaction.created") {
+          void loadRiskData();
+        }
+      } catch {
+        console.error(
+          "❌ Invalid Risk Monitor WebSocket message:",
+          event.data,
+        );
+      }
+    };
+
+    socket.onerror = (socketError) => {
+      console.error(
+        "❌ Risk Monitor WebSocket error:",
+        socketError,
+      );
+    };
+
+    socket.onclose = (event) => {
+      console.log(
+        "🔌 Risk Monitor WebSocket disconnected:",
+        event.code,
+        event.reason,
+      );
+    };
+
+    return () => {
+      socket.close();
+    };
+  }, [loadRiskData]);
 
   const highRisk = useMemo(
     () =>
@@ -260,6 +309,7 @@ function Risk() {
 
                 const isHigh = level === "HIGH";
                 const isMedium = level === "MEDIUM";
+
                 const isSelected =
                   selectedTransaction?.id === transaction.id;
 
