@@ -1,10 +1,59 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.health import router as health_router
 from app.api.v1.transactions import router as transaction_router
 
+
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: list[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+        print(
+            f"🔌 WebSocket connected | Active connections: {len(self.active_connections)}"
+        )
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+            print(
+                f"🔌 WebSocket disconnected | Active connections: {len(self.active_connections)}"
+            )
+
+    async def broadcast(self, message: dict):
+        print("📡 Broadcasting WebSocket message")
+        print(
+            f"👥 Active WebSocket connections: {len(self.active_connections)}"
+        )
+        print(f"📨 Message type: {message.get('type')}")
+
+        disconnected = []
+
+        for index, connection in enumerate(
+            list(self.active_connections),
+            start=1,
+        ):
+            try:
+                await connection.send_json(message)
+                print(
+                    f"✅ WebSocket message sent successfully to connection {index}"
+                )
+            except Exception as error:
+                print(
+                    f"❌ WebSocket send failed for connection {index}: {error}"
+                )
+                disconnected.append(connection)
+
+        for connection in disconnected:
+            self.disconnect(connection)
+
+
 app = FastAPI()
+
+app.state.connection_manager = ConnectionManager()
 
 app.add_middleware(
     CORSMiddleware,
@@ -28,6 +77,19 @@ app.include_router(
     prefix="/api/v1",
     tags=["Transactions"],
 )
+
+
+@app.websocket("/ws/transactions")
+async def transaction_websocket(websocket: WebSocket):
+    manager = app.state.connection_manager
+
+    await manager.connect(websocket)
+
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
 
 
 @app.get("/")

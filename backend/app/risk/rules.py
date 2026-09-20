@@ -1,16 +1,35 @@
 from decimal import Decimal
 
 
+# Transaction amount thresholds
 HIGH_AMOUNT_THRESHOLD = Decimal("10000")
+
 VERY_HIGH_AMOUNT_THRESHOLD = Decimal("50000")
 
-NEW_DEVICE_SCORE = 20
+EXTREMELY_HIGH_AMOUNT_THRESHOLD = Decimal("1000000")
+
+
+# Risk scores
 HIGH_AMOUNT_SCORE = 25
+
 VERY_HIGH_AMOUNT_SCORE = 40
+
+EXTREMELY_HIGH_AMOUNT_SCORE = 75
+
+
+# Other risk scores
+NEW_DEVICE_SCORE = 20
+
 HIGH_VELOCITY_SCORE = 30
 
 BEHAVIORAL_ANOMALY_SCORE = 25
+
+
+# Behavioral analysis
 BEHAVIORAL_Z_SCORE_THRESHOLD = Decimal("3")
 
+
+# Transaction velocity
 VELOCITY_TRANSACTION_LIMIT = 3
+
 VELOCITY_WINDOW_SECONDS = 60

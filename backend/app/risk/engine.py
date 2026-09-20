@@ -3,6 +3,8 @@ from decimal import Decimal
 from app.risk.rules import (
     BEHAVIORAL_ANOMALY_SCORE,
     BEHAVIORAL_Z_SCORE_THRESHOLD,
+    EXTREMELY_HIGH_AMOUNT_SCORE,
+    EXTREMELY_HIGH_AMOUNT_THRESHOLD,
     HIGH_AMOUNT_SCORE,
     HIGH_AMOUNT_THRESHOLD,
     HIGH_VELOCITY_SCORE,
@@ -56,7 +58,11 @@ def calculate_risk(
     reasons = []
 
     # Rule 1: transaction amount
-    if transaction.amount >= VERY_HIGH_AMOUNT_THRESHOLD:
+    if transaction.amount >= EXTREMELY_HIGH_AMOUNT_THRESHOLD:
+        risk_score += EXTREMELY_HIGH_AMOUNT_SCORE
+        reasons.append("Extremely high transaction amount")
+
+    elif transaction.amount >= VERY_HIGH_AMOUNT_THRESHOLD:
         risk_score += VERY_HIGH_AMOUNT_SCORE
         reasons.append("Very high transaction amount")
 
@@ -65,7 +71,10 @@ def calculate_risk(
         reasons.append("High transaction amount")
 
     # Rule 2: new device
-    if transaction.device_id and transaction.device_id.startswith("new_"):
+    if (
+        transaction.device_id
+        and transaction.device_id.startswith("new_")
+    ):
         risk_score += NEW_DEVICE_SCORE
         reasons.append("Transaction from a new device")
 
