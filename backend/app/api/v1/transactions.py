@@ -3,7 +3,9 @@ from fastapi.encoders import jsonable_encoder
 
 from app.repositories.transactions import (
     count_recent_transactions,
+    create_risk_assessment,
     create_transaction,
+    get_risk_assessment_by_transaction_id,
     get_transaction_by_id,
     get_transactions,
     get_transactions_by_user,
@@ -67,7 +69,19 @@ async def create_transaction_endpoint(
     )
 
     result = create_transaction(transaction)
-    response = transaction_with_risk_to_response(result, risk)
+
+    create_risk_assessment(
+        transaction_id=result[0],
+        risk_score=risk["risk_score"],
+        risk_level=risk["risk_level"],
+        decision=risk["decision"],
+        reasons=risk["reasons"],
+    )
+
+    response = transaction_with_risk_to_response(
+        result,
+        risk,
+    )
 
     websocket_payload = jsonable_encoder(
         {
@@ -132,44 +146,56 @@ def list_user_transaction_risk(user_id: int):
     results = []
 
     for transaction in transactions:
-        current_transaction = TransactionCreate(
-            user_id=transaction[1],
-            amount=transaction[2],
-            currency=transaction[3],
-            merchant=transaction[4],
-            category=transaction[5],
-            timestamp=transaction[6],
-            location=transaction[7],
-            device_id=transaction[8],
-            status=transaction[9],
+        risk_record = get_risk_assessment_by_transaction_id(
+            transaction[0]
         )
 
-        historical_amounts = get_user_transaction_amounts(
-            user_id=user_id,
-        )
+        if risk_record is not None:
+            risk = {
+                "risk_score": risk_record[0],
+                "risk_level": risk_record[1],
+                "decision": risk_record[2],
+                "reasons": risk_record[3],
+            }
+        else:
+            current_transaction = TransactionCreate(
+                user_id=transaction[1],
+                amount=transaction[2],
+                currency=transaction[3],
+                merchant=transaction[4],
+                category=transaction[5],
+                timestamp=transaction[6],
+                location=transaction[7],
+                device_id=transaction[8],
+                status=transaction[9],
+            )
 
-        historical_amounts = [
-            amount
-            for amount in historical_amounts
-            if amount != transaction[2]
-        ]
+            historical_amounts = get_user_transaction_amounts(
+                user_id=user_id,
+            )
 
-        recent_transaction_count = count_recent_transactions(
-            user_id=user_id,
-            timestamp=transaction[6],
-            window_seconds=VELOCITY_WINDOW_SECONDS,
-        )
+            historical_amounts = [
+                amount
+                for amount in historical_amounts
+                if amount != transaction[2]
+            ]
 
-        recent_transaction_count = max(
-            recent_transaction_count - 1,
-            0,
-        )
+            recent_transaction_count = count_recent_transactions(
+                user_id=user_id,
+                timestamp=transaction[6],
+                window_seconds=VELOCITY_WINDOW_SECONDS,
+            )
 
-        risk = calculate_risk(
-            current_transaction,
-            recent_transaction_count=recent_transaction_count,
-            historical_amounts=historical_amounts,
-        )
+            recent_transaction_count = max(
+                recent_transaction_count - 1,
+                0,
+            )
+
+            risk = calculate_risk(
+                current_transaction,
+                recent_transaction_count=recent_transaction_count,
+                historical_amounts=historical_amounts,
+            )
 
         results.append(
             transaction_with_risk_to_response(

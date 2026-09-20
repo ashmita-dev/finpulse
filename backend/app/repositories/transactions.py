@@ -58,6 +58,80 @@ def create_transaction(transaction: TransactionCreate):
         connection.close()
 
 
+def create_risk_assessment(
+    transaction_id: int,
+    risk_score: int,
+    risk_level: str,
+    decision: str,
+    reasons: list[str],
+):
+    connection = get_connection()
+
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO risk_assessments (
+                    transaction_id,
+                    risk_score,
+                    risk_level,
+                    decision,
+                    reasons
+                )
+                VALUES (
+                    %s, %s, %s, %s, %s
+                )
+                RETURNING
+                    id,
+                    transaction_id,
+                    risk_score,
+                    risk_level,
+                    decision,
+                    reasons,
+                    created_at;
+                """,
+                (
+                    transaction_id,
+                    risk_score,
+                    risk_level,
+                    decision,
+                    reasons,
+                ),
+            )
+
+            result = cursor.fetchone()
+            connection.commit()
+
+            return result
+
+    finally:
+        connection.close()
+
+
+def get_risk_assessment_by_transaction_id(transaction_id: int):
+    connection = get_connection()
+
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    risk_score,
+                    risk_level,
+                    decision,
+                    reasons
+                FROM risk_assessments
+                WHERE transaction_id = %s;
+                """,
+                (transaction_id,),
+            )
+
+            return cursor.fetchone()
+
+    finally:
+        connection.close()
+
+
 def get_transactions():
     connection = get_connection()
 
