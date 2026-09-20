@@ -1,4 +1,5 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.encoders import jsonable_encoder
 
 from app.repositories.transactions import (
     count_recent_transactions,
@@ -45,7 +46,10 @@ def transaction_with_risk_to_response(result, risk):
     "/transactions",
     response_model=TransactionWithRiskResponse,
 )
-def create_transaction_endpoint(transaction: TransactionCreate):
+async def create_transaction_endpoint(
+    transaction: TransactionCreate,
+    request: Request,
+):
     recent_transaction_count = count_recent_transactions(
         user_id=transaction.user_id,
         timestamp=transaction.timestamp,
@@ -63,8 +67,20 @@ def create_transaction_endpoint(transaction: TransactionCreate):
     )
 
     result = create_transaction(transaction)
+    response = transaction_with_risk_to_response(result, risk)
 
-    return transaction_with_risk_to_response(result, risk)
+    websocket_payload = jsonable_encoder(
+        {
+            "type": "transaction.created",
+            "data": response,
+        }
+    )
+
+    await request.app.state.connection_manager.broadcast(
+        websocket_payload
+    )
+
+    return response
 
 
 @router.get(
