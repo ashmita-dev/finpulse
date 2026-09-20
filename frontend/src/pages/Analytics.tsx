@@ -69,7 +69,10 @@ function Analytics() {
       try {
         const message = JSON.parse(event.data);
 
-        if (message.type === "transaction.created") {
+        if (
+          message.type === "transaction.created" ||
+          message.type === "risk.action.updated"
+        ) {
           void loadTransactions();
         }
       } catch {
@@ -95,11 +98,21 @@ function Analytics() {
     };
   }, []);
 
-  const currencies = useMemo(() => {
-    return Array.from(
-      new Set(transactions.map((transaction) => transaction.currency)),
+  const completedTransactions = useMemo(() => {
+    return transactions.filter(
+      (transaction) => transaction.status === "completed",
     );
   }, [transactions]);
+
+  const currencies = useMemo(() => {
+    return Array.from(
+      new Set(
+        completedTransactions.map(
+          (transaction) => transaction.currency,
+        ),
+      ),
+    );
+  }, [completedTransactions]);
 
   useEffect(() => {
     if (
@@ -115,11 +128,11 @@ function Analytics() {
   }, [currencies, selectedCurrency]);
 
   const currencyTransactions = useMemo(() => {
-    return transactions.filter(
+    return completedTransactions.filter(
       (transaction) =>
         transaction.currency === selectedCurrency,
     );
-  }, [transactions, selectedCurrency]);
+  }, [completedTransactions, selectedCurrency]);
 
   const total = useMemo(() => {
     return currencyTransactions.reduce(
@@ -181,8 +194,8 @@ function Analytics() {
           <h2>Analytics.</h2>
 
           <p>
-            Understand spending patterns across the
-            transaction history.
+            Understand spending patterns across completed
+            transactions.
           </p>
         </div>
 
@@ -245,7 +258,8 @@ function Analytics() {
 
           <div className="metric-footer">
             <span>
-              {currencyTransactions.length} transactions
+              {currencyTransactions.length} completed
+              transactions
             </span>
           </div>
         </article>
@@ -473,7 +487,7 @@ function Analytics() {
               </strong>
 
               <span>
-                Based on selected currency
+                Based on completed transactions
               </span>
             </div>
           </div>
@@ -492,7 +506,7 @@ function Analytics() {
 
           <div className="stream-status">
             <span />
-            Derived from transaction data
+            Derived from completed transaction data
           </div>
         </div>
 
