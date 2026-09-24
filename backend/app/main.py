@@ -1,8 +1,11 @@
+import asyncio
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.health import router as health_router
 from app.api.v1.transactions import router as transaction_router
+from app.kafka.websocket_bridge import run_websocket_bridge
 
 
 class ConnectionManager:
@@ -54,6 +57,7 @@ class ConnectionManager:
 app = FastAPI()
 
 app.state.connection_manager = ConnectionManager()
+app.state.websocket_bridge_task = None
 
 app.add_middleware(
     CORSMiddleware,
@@ -77,6 +81,30 @@ app.include_router(
     prefix="/api/v1",
     tags=["Transactions"],
 )
+
+
+@app.on_event("startup")
+async def startup_event():
+    app.state.websocket_bridge_task = asyncio.create_task(
+        run_websocket_bridge(app)
+    )
+
+    print("🚀 FinPulse WebSocket Kafka bridge started")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    task = app.state.websocket_bridge_task
+
+    if task is not None:
+        task.cancel()
+
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+    print("🛑 FinPulse WebSocket Kafka bridge stopped")
 
 
 @app.websocket("/ws/transactions")
