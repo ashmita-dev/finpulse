@@ -4,10 +4,10 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
 
+from app.kafka.producer import publish_event
 from app.repositories.risk_actions import apply_risk_action
 from app.repositories.transactions import (
     count_recent_transactions,
-    create_risk_assessment,
     create_transaction,
     get_risk_assessment_by_transaction_id,
     get_transaction_by_id,
@@ -54,53 +54,34 @@ def transaction_with_risk_to_response(result, risk):
 
 @router.post(
     "/transactions",
-    response_model=TransactionWithRiskResponse,
+    response_model=TransactionResponse,
 )
 async def create_transaction_endpoint(
     transaction: TransactionCreate,
     request: Request,
 ):
-    recent_transaction_count = count_recent_transactions(
-        user_id=transaction.user_id,
-        timestamp=transaction.timestamp,
-        window_seconds=VELOCITY_WINDOW_SECONDS,
-    )
+    result = create_transaction(transaction)
 
-    historical_amounts = get_user_transaction_amounts(
-        user_id=transaction.user_id,
-    )
+    response = transaction_to_response(result)
 
-    risk = calculate_risk(
-        transaction,
-        recent_transaction_count=recent_transaction_count,
-        historical_amounts=historical_amounts,
-    )
-
-    status_map = {
-        "APPROVE": "completed",
-        "REVIEW": "review",
-        "BLOCK": "blocked",
-    }
-
-    persisted_transaction = transaction.model_copy(
-        update={
-            "status": status_map[risk["decision"]],
+    kafka_payload = jsonable_encoder(
+        {
+            "transaction_id": response["id"],
+            "user_id": response["user_id"],
+            "amount": response["amount"],
+            "currency": response["currency"],
+            "merchant": response["merchant"],
+            "category": response["category"],
+            "timestamp": response["timestamp"],
+            "location": response["location"],
+            "device_id": response["device_id"],
+            "status": response["status"],
         }
     )
 
-    result = create_transaction(persisted_transaction)
-
-    create_risk_assessment(
-        transaction_id=result[0],
-        risk_score=risk["risk_score"],
-        risk_level=risk["risk_level"],
-        decision=risk["decision"],
-        reasons=risk["reasons"],
-    )
-
-    response = transaction_with_risk_to_response(
-        result,
-        risk,
+    publish_event(
+        "transaction.created",
+        kafka_payload,
     )
 
     websocket_payload = jsonable_encoder(

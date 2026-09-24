@@ -81,6 +81,12 @@ def create_risk_assessment(
                 VALUES (
                     %s, %s, %s, %s, %s
                 )
+                ON CONFLICT (transaction_id)
+                DO UPDATE SET
+                    risk_score = EXCLUDED.risk_score,
+                    risk_level = EXCLUDED.risk_level,
+                    decision = EXCLUDED.decision,
+                    reasons = EXCLUDED.reasons
                 RETURNING
                     id,
                     transaction_id,

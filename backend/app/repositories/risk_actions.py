@@ -86,3 +86,65 @@ def apply_risk_action(
 
     finally:
         connection.close()
+
+
+def update_transaction_status(
+    transaction_id: int,
+    decision: str,
+):
+    connection = get_connection()
+
+    status_map = {
+        "APPROVE": "completed",
+        "REVIEW": "review",
+        "BLOCK": "blocked",
+    }
+
+    if decision not in status_map:
+        raise ValueError(
+            f"Unsupported risk decision: {decision}"
+        )
+
+    status = status_map[decision]
+
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                UPDATE transactions
+                SET status = %s
+                WHERE id = %s
+                RETURNING
+                    id,
+                    user_id,
+                    amount,
+                    currency,
+                    merchant,
+                    category,
+                    timestamp,
+                    location,
+                    device_id,
+                    status;
+                """,
+                (
+                    status,
+                    transaction_id,
+                ),
+            )
+
+            result = cursor.fetchone()
+
+            if result is None:
+                connection.rollback()
+                return None
+
+            connection.commit()
+
+            return result
+
+    except Exception:
+        connection.rollback()
+        raise
+
+    finally:
+        connection.close()
