@@ -8,17 +8,24 @@ from app.config import (
     KAFKA_SASL_PASSWORD,
     KAFKA_SASL_USERNAME,
     KAFKA_SECURITY_PROTOCOL,
+    KAFKA_SSL_CAFILE,
 )
 
 
-producer = KafkaProducer(
-    bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
-    security_protocol=KAFKA_SECURITY_PROTOCOL,
-    sasl_mechanism=KAFKA_SASL_MECHANISM,
-    sasl_plain_username=KAFKA_SASL_USERNAME,
-    sasl_plain_password=KAFKA_SASL_PASSWORD,
-    value_serializer=lambda value: json.dumps(value).encode("utf-8"),
-)
+kafka_config = {
+    "bootstrap_servers": KAFKA_BOOTSTRAP_SERVERS,
+    "security_protocol": KAFKA_SECURITY_PROTOCOL,
+    "sasl_mechanism": KAFKA_SASL_MECHANISM,
+    "sasl_plain_username": KAFKA_SASL_USERNAME,
+    "sasl_plain_password": KAFKA_SASL_PASSWORD,
+    "value_serializer": lambda value: json.dumps(value).encode("utf-8"),
+}
+
+if KAFKA_SECURITY_PROTOCOL == "SASL_SSL":
+    kafka_config["ssl_cafile"] = KAFKA_SSL_CAFILE
+
+
+producer = KafkaProducer(**kafka_config)
 
 
 def publish_event(
