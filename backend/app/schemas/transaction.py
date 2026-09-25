@@ -15,7 +15,7 @@ class TransactionCreate(BaseModel):
     timestamp: datetime
     location: str | None = None
     device_id: str | None = None
-    status: str = "completed"
+    status: str = "pending"
 
 
 class TransactionResponse(BaseModel):

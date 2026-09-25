@@ -7,16 +7,12 @@ from pydantic import BaseModel
 from app.kafka.producer import publish_event
 from app.repositories.risk_actions import apply_risk_action
 from app.repositories.transactions import (
-    count_recent_transactions,
     create_transaction,
     get_risk_assessment_by_transaction_id,
     get_transaction_by_id,
     get_transactions,
     get_transactions_by_user,
-    get_user_transaction_amounts,
 )
-from app.risk.engine import calculate_risk
-from app.risk.rules import VELOCITY_WINDOW_SECONDS
 from app.schemas.transaction import (
     TransactionCreate,
     TransactionResponse,
@@ -60,6 +56,10 @@ async def create_transaction_endpoint(
     transaction: TransactionCreate,
     request: Request,
 ):
+    transaction = transaction.model_copy(
+        update={"status": "pending"}
+    )
+
     result = create_transaction(transaction)
 
     response = transaction_to_response(result)
@@ -75,7 +75,7 @@ async def create_transaction_endpoint(
             "timestamp": response["timestamp"],
             "location": response["location"],
             "device_id": response["device_id"],
-            "status": response["status"],
+            "status": "pending",
         }
     )
 
@@ -146,7 +146,10 @@ async def update_transaction_decision(
 def list_transactions():
     results = get_transactions()
 
-    return [transaction_to_response(result) for result in results]
+    return [
+        transaction_to_response(result)
+        for result in results
+    ]
 
 
 @router.get(
@@ -172,7 +175,10 @@ def get_transaction(transaction_id: int):
 def list_user_transactions(user_id: int):
     results = get_transactions_by_user(user_id)
 
-    return [transaction_to_response(result) for result in results]
+    return [
+        transaction_to_response(result)
+        for result in results
+    ]
 
 
 @router.get(
@@ -192,52 +198,15 @@ def list_user_transaction_risk(user_id: int):
             transaction[0]
         )
 
-        if risk_record is not None:
-            risk = {
-                "risk_score": risk_record[0],
-                "risk_level": risk_record[1],
-                "decision": risk_record[2],
-                "reasons": risk_record[3],
-            }
-        else:
-            current_transaction = TransactionCreate(
-                user_id=transaction[1],
-                amount=transaction[2],
-                currency=transaction[3],
-                merchant=transaction[4],
-                category=transaction[5],
-                timestamp=transaction[6],
-                location=transaction[7],
-                device_id=transaction[8],
-                status=transaction[9],
-            )
+        if risk_record is None:
+            continue
 
-            historical_amounts = get_user_transaction_amounts(
-                user_id=user_id,
-            )
-
-            historical_amounts = [
-                amount
-                for amount in historical_amounts
-                if amount != transaction[2]
-            ]
-
-            recent_transaction_count = count_recent_transactions(
-                user_id=user_id,
-                timestamp=transaction[6],
-                window_seconds=VELOCITY_WINDOW_SECONDS,
-            )
-
-            recent_transaction_count = max(
-                recent_transaction_count - 1,
-                0,
-            )
-
-            risk = calculate_risk(
-                current_transaction,
-                recent_transaction_count=recent_transaction_count,
-                historical_amounts=historical_amounts,
-            )
+        risk = {
+            "risk_score": risk_record[0],
+            "risk_level": risk_record[1],
+            "decision": risk_record[2],
+            "reasons": risk_record[3],
+        }
 
         results.append(
             transaction_with_risk_to_response(
