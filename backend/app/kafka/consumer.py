@@ -109,7 +109,7 @@ def process_transaction_event(
 ):
     transaction = parse_transaction_event(event)
 
-    risk = process_transaction(transaction)
+    risk = process_transaction(event)
 
     create_risk_assessment(
         transaction_id=transaction["transaction_id"],
@@ -134,6 +134,7 @@ def create_consumer():
         "sasl_mechanism": KAFKA_SASL_MECHANISM,
         "sasl_plain_username": KAFKA_SASL_USERNAME,
         "sasl_plain_password": KAFKA_SASL_PASSWORD,
+        "api_version": (3, 7, 0),
         "group_id": "finpulse-risk-engine",
         "auto_offset_reset": "earliest",
         "enable_auto_commit": False,
@@ -158,6 +159,7 @@ def create_event_producer():
         "sasl_mechanism": KAFKA_SASL_MECHANISM,
         "sasl_plain_username": KAFKA_SASL_USERNAME,
         "sasl_plain_password": KAFKA_SASL_PASSWORD,
+        "api_version": (3, 7, 0),
         "value_serializer": lambda value: json.dumps(value).encode("utf-8"),
     }
 

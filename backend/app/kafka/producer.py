@@ -18,6 +18,7 @@ kafka_config = {
     "sasl_mechanism": KAFKA_SASL_MECHANISM,
     "sasl_plain_username": KAFKA_SASL_USERNAME,
     "sasl_plain_password": KAFKA_SASL_PASSWORD,
+    "api_version": (3, 7, 0),
     "value_serializer": lambda value: json.dumps(value).encode("utf-8"),
 }
 
