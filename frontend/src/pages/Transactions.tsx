@@ -98,6 +98,8 @@ function Transactions() {
   const [createError, setCreateError] = useState("");
   const [createdRisk, setCreatedRisk] =
     useState<TransactionWithRisk | null>(null);
+  const [screeningTransaction, setScreeningTransaction] =
+    useState<Transaction | null>(null);
   const [form, setForm] = useState({
     amount: "",
     merchant: "",
@@ -120,6 +122,7 @@ function Transactions() {
   async function handleCreateTransaction() {
     setCreateError("");
     setCreatedRisk(null);
+    setScreeningTransaction(null);
 
     const amount = Number(form.amount);
 
@@ -145,12 +148,86 @@ function Transactions() {
         timestamp: new Date().toISOString(),
         location: form.location.trim() || null,
         device_id: form.device_id.trim() || null,
-        status: "completed",
+        status: "pending",
       });
 
-      setCreatedRisk(result);
+      const pendingTransaction: Transaction = {
+        id: result.id,
+        user_id: result.user_id,
+        amount: result.amount,
+        currency: result.currency,
+        merchant: result.merchant,
+        category: result.category,
+        timestamp: result.timestamp,
+        location: result.location,
+        device_id: result.device_id,
+        status: "pending",
+      };
+
+      setScreeningTransaction(pendingTransaction);
 
       await dispatch(fetchUserTransactions(1));
+
+      const screeningStartedAt = Date.now();
+
+      let riskResult: TransactionWithRisk | null = null;
+
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        const riskTransactions = await getUserRiskTransactions(1);
+
+        riskResult =
+          riskTransactions.find(
+            (transaction) => transaction.id === result.id,
+          ) ?? null;
+
+        if (riskResult) {
+          break;
+        }
+
+        await new Promise((resolve) =>
+          setTimeout(resolve, 500),
+        );
+      }
+
+      const elapsedScreeningTime =
+        Date.now() - screeningStartedAt;
+
+      const minimumScreeningTime = 1000;
+
+      if (elapsedScreeningTime < minimumScreeningTime) {
+        await new Promise((resolve) =>
+          setTimeout(
+            resolve,
+            minimumScreeningTime - elapsedScreeningTime,
+          ),
+        );
+      }
+
+      if (riskResult) {
+        setCreatedRisk(riskResult);
+
+        setRiskTransactions((current) => {
+          const existingIndex = current.findIndex(
+            (transaction) => transaction.id === riskResult!.id,
+          );
+
+          if (existingIndex === -1) {
+            return [riskResult!, ...current];
+          }
+
+          const updated = [...current];
+          updated[existingIndex] = riskResult!;
+          return updated;
+        });
+
+        await dispatch(fetchUserTransactions(1));
+        setScreeningTransaction(null);
+      } else {
+        setCreatedRisk(null);
+        setCreateError(
+          "Transaction created successfully, but the risk assessment is still processing. Refreshing the transaction history will show the result once Kafka finishes processing.",
+        );
+      }
     } catch (err) {
       setCreateError(
         err instanceof Error
@@ -199,11 +276,25 @@ function Transactions() {
     ];
   }, [transactions]);
 
+  const displayTransactions = useMemo(() => {
+    if (!screeningTransaction) {
+      return transactions;
+    }
+
+    return [
+      screeningTransaction,
+      ...transactions.filter(
+        (transaction) =>
+          transaction.id !== screeningTransaction.id,
+      ),
+    ];
+  }, [transactions, screeningTransaction]);
+
   const filteredTransactions = useMemo(() => {
     const normalizedSearch =
       search.trim().toLowerCase();
 
-    return transactions.filter(
+    return displayTransactions.filter(
       (transaction) => {
         const matchesSearch =
           normalizedSearch.length === 0 ||
@@ -225,7 +316,7 @@ function Transactions() {
       },
     );
   }, [
-    transactions,
+    displayTransactions,
     search,
     category,
   ]);
@@ -602,7 +693,7 @@ function Transactions() {
           </button>
         </div>
 
-        {(createError || createdRisk) && (
+        {(createError || createdRisk || screeningTransaction) && (
           <div
             style={{
               margin: "0 21px 20px",
@@ -632,6 +723,90 @@ function Transactions() {
               >
                 <AlertTriangle size={14} />
                 {createError}
+              </div>
+            ) : screeningTransaction ? (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "16px",
+                  flexWrap: "wrap",
+                }}
+              >
+                <div>
+                  <span
+                    style={{
+                      display: "block",
+                      marginBottom: "5px",
+                      color: "#87908c",
+                      fontSize: "9px",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.1em",
+                    }}
+                  >
+                    Transaction screening
+                  </span>
+                  <strong
+                    style={{
+                      display: "block",
+                      color: "#17201d",
+                      fontSize: "19px",
+                    }}
+                  >
+                    Screening in progress
+                  </strong>
+                  <span
+                    style={{
+                      display: "block",
+                      marginTop: "4px",
+                      color: "#6e7974",
+                      fontSize: "10px",
+                    }}
+                  >
+                    {screeningTransaction.merchant} · {formatCurrency(
+                      screeningTransaction.amount,
+                      screeningTransaction.currency,
+                    )}
+                  </span>
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px",
+                  }}
+                >
+                  <div
+                    style={{
+                      padding: "11px 14px",
+                      border: "1px solid #dcefe8",
+                      borderRadius: "7px",
+                      background: "#f4fbf8",
+                    }}
+                  >
+                    <span
+                      style={{
+                        display: "block",
+                        marginBottom: "4px",
+                        color: "#87908c",
+                        fontSize: "8px",
+                      }}
+                    >
+                      STATUS
+                    </span>
+                    <strong
+                      style={{
+                        color: "#148f70",
+                        fontSize: "12px",
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      pending
+                    </strong>
+                  </div>
+                </div>
               </div>
             ) : createdRisk ? (
               <div
@@ -916,8 +1091,17 @@ function Transactions() {
                       transaction.status.toLowerCase() ===
                       "completed"
                         ? "approved"
-                        : "review"
+                        : transaction.status.toLowerCase() ===
+                            "blocked"
+                          ? "blocked"
+                          : transaction.status.toLowerCase() ===
+                              "pending"
+                            ? "pending"
+                            : "review"
                     }`}
+                    style={{
+                      textTransform: "uppercase",
+                    }}
                   >
                     {transaction.status}
                   </span>
@@ -1559,12 +1743,30 @@ function Transactions() {
                     )}
                   </div>
                 </>
+              ) : selectedTransaction.status.toLowerCase() ===
+                "pending" ? (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    padding: "15px",
+                    border:
+                      "1px solid #dcefe8",
+                    borderRadius: "8px",
+                    background: "#f4fbf8",
+                    color: "#148f70",
+                    fontSize: "10px",
+                  }}
+                >
+                  <ShieldAlert size={14} />
+                  Risk assessment is currently in progress.
+                </div>
               ) : !isRiskLoading ? (
                 <div
                   style={{
                     display: "flex",
-                    alignItems:
-                      "center",
+                    alignItems: "center",
                     gap: "8px",
                     padding: "15px",
                     border:
