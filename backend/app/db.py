@@ -17,4 +17,5 @@ def get_connection():
         dbname=os.getenv("DATABASE_NAME"),
         user=os.getenv("DATABASE_USER"),
         password=os.getenv("DATABASE_PASSWORD"),
+        sslmode=os.getenv("DATABASE_SSLMODE", "require"),
     )
