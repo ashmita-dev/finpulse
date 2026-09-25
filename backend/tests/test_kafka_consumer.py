@@ -59,6 +59,11 @@ def test_process_transaction_event(monkeypatch):
         lambda **kwargs: None,
     )
 
+    monkeypatch.setattr(
+        "app.kafka.consumer.update_transaction_status",
+        lambda **kwargs: None,
+    )
+
     result = process_transaction_event(event)
 
     assert result["risk_score"] == 0
@@ -112,6 +117,11 @@ def test_persist_risk_assessment(monkeypatch):
     monkeypatch.setattr(
         "app.kafka.consumer.create_risk_assessment",
         fake_persist,
+    )
+
+    monkeypatch.setattr(
+        "app.kafka.consumer.update_transaction_status",
+        lambda **kwargs: None,
     )
 
     result = process_transaction_event(event)
