@@ -992,8 +992,14 @@ function App() {
               );
             })
             .map((transaction: any) => {
+              const risk = transaction?.risk;
+
+              if (!risk) {
+                return null;
+              }
+
               const riskLevel = String(
-                transaction.risk.risk_level ?? "",
+                risk.risk_level ?? "",
               ).toUpperCase();
 
               seenNotificationIds.current.add(
@@ -1010,6 +1016,12 @@ function App() {
                   transaction.timestamp,
               };
             })
+            .filter(
+              (
+                notification: NotificationItem | null,
+              ): notification is NotificationItem =>
+                notification !== null,
+            )
             .slice(0, 10);
 
         setNotifications(existingNotifications);
