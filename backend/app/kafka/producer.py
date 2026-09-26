@@ -1,4 +1,5 @@
 import json
+import logging
 import ssl
 
 from kafka import KafkaProducer
@@ -12,6 +13,8 @@ from app.config import (
     KAFKA_SSL_CAFILE,
 )
 
+logger = logging.getLogger(__name__)
+
 kafka_config = {
     "bootstrap_servers": KAFKA_BOOTSTRAP_SERVERS,
     "security_protocol": KAFKA_SECURITY_PROTOCOL,
@@ -21,9 +24,9 @@ kafka_config = {
     "api_version": (3, 7, 0),
     "value_serializer": lambda value: json.dumps(value).encode("utf-8"),
     "acks": "all",
-    "retries": 3,
-    "max_block_ms": 10000,
-    "request_timeout_ms": 10000,
+    "retries": 1,
+    "max_block_ms": 5000,
+    "request_timeout_ms": 5000,
 }
 
 if KAFKA_SECURITY_PROTOCOL == "SASL_SSL":
@@ -35,15 +38,15 @@ if KAFKA_SECURITY_PROTOCOL == "SASL_SSL":
 producer = KafkaProducer(**kafka_config)
 
 
-def publish_event(
-    topic: str,
-    event: dict,
-):
-    future = producer.send(
-        topic,
-        value=event,
-    )
-    future.get(timeout=10)
+def publish_event(topic: str, event: dict) -> bool:
+    try:
+        future = producer.send(topic, value=event)
+        future.get(timeout=5)
+        logger.info("Kafka event published successfully: %s", topic)
+        return True
+    except Exception as exc:
+        logger.error("Kafka publish failed for topic %s: %s", topic, exc)
+        return False
 
 
 def close_producer():
