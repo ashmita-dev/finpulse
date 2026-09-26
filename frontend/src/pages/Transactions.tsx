@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -13,18 +13,11 @@ import {
 } from "lucide-react";
 
 import {
-  useAppDispatch,
-  useAppSelector,
-} from "../app/hooks";
-
-import {
-  fetchUserTransactions,
-} from "../features/transactions/transactionsSlice";
-
-import {
   createTransaction,
   getUserRiskTransactions,
+  getUserTransactions,
 } from "../services/api";
+
 import type {
   Transaction,
   TransactionWithRisk,
@@ -73,14 +66,27 @@ function getRiskColor(level: string) {
 }
 
 function Transactions() {
-  const dispatch = useAppDispatch();
-  const {
-    items: transactions,
-    isLoading,
-    error,
-  } = useAppSelector(
-    (state) => state.transactions,
-  );
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const loadTransactions = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError("");
+
+      const data = await getUserTransactions(1);
+      setTransactions(data);
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Unable to load transactions.",
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
@@ -98,8 +104,10 @@ function Transactions() {
   const [createError, setCreateError] = useState("");
   const [createdRisk, setCreatedRisk] =
     useState<TransactionWithRisk | null>(null);
+
   const [screeningTransaction, setScreeningTransaction] =
     useState<Transaction | null>(null);
+
   const [form, setForm] = useState({
     amount: "",
     merchant: "",
@@ -166,14 +174,15 @@ function Transactions() {
 
       setScreeningTransaction(pendingTransaction);
 
-      await dispatch(fetchUserTransactions(1));
+      await loadTransactions();
 
       const screeningStartedAt = Date.now();
 
       let riskResult: TransactionWithRisk | null = null;
 
       for (let attempt = 0; attempt < 20; attempt += 1) {
-        const riskTransactions = await getUserRiskTransactions(1);
+        const riskTransactions =
+          await getUserRiskTransactions(1);
 
         riskResult =
           riskTransactions.find(
@@ -220,7 +229,7 @@ function Transactions() {
           return updated;
         });
 
-        await dispatch(fetchUserTransactions(1));
+        await loadTransactions();
         setScreeningTransaction(null);
       } else {
         setCreatedRisk(null);
@@ -242,6 +251,10 @@ function Transactions() {
   const createdRiskColor = createdRisk
     ? getRiskColor(createdRisk.risk.risk_level)
     : null;
+
+  useEffect(() => {
+    void loadTransactions();
+  }, [loadTransactions]);
 
   useEffect(() => {
     async function loadRiskData() {
@@ -400,9 +413,11 @@ function Transactions() {
             <span className="panel-kicker">
               Live transaction screening
             </span>
+
             <h3 style={{ marginTop: "4px" }}>
               Analyze a new transaction
             </h3>
+
             <p
               style={{
                 margin: "6px 0 0",
@@ -413,6 +428,7 @@ function Transactions() {
               Submit a transaction and receive an instant risk decision.
             </p>
           </div>
+
           <ShieldAlert
             size={20}
             color="#148f70"
@@ -443,6 +459,7 @@ function Transactions() {
             >
               Amount
             </label>
+
             <input
               value={form.amount}
               onChange={(event) =>
@@ -481,6 +498,7 @@ function Transactions() {
             >
               Merchant
             </label>
+
             <input
               value={form.merchant}
               onChange={(event) =>
@@ -516,6 +534,7 @@ function Transactions() {
             >
               Category
             </label>
+
             <select
               value={form.category}
               onChange={(event) =>
@@ -564,6 +583,7 @@ function Transactions() {
             >
               Currency
             </label>
+
             <select
               value={form.currency}
               onChange={(event) =>
@@ -613,6 +633,7 @@ function Transactions() {
             >
               Location
             </label>
+
             <input
               value={form.location}
               onChange={(event) =>
@@ -648,6 +669,7 @@ function Transactions() {
             >
               Device ID
             </label>
+
             <input
               value={form.device_id}
               onChange={(event) =>
@@ -747,6 +769,7 @@ function Transactions() {
                   >
                     Transaction screening
                   </span>
+
                   <strong
                     style={{
                       display: "block",
@@ -756,6 +779,7 @@ function Transactions() {
                   >
                     Screening in progress
                   </strong>
+
                   <span
                     style={{
                       display: "block",
@@ -764,7 +788,8 @@ function Transactions() {
                       fontSize: "10px",
                     }}
                   >
-                    {screeningTransaction.merchant} · {formatCurrency(
+                    {screeningTransaction.merchant} ·{" "}
+                    {formatCurrency(
                       screeningTransaction.amount,
                       screeningTransaction.currency,
                     )}
@@ -796,6 +821,7 @@ function Transactions() {
                     >
                       STATUS
                     </span>
+
                     <strong
                       style={{
                         color: "#148f70",
@@ -831,6 +857,7 @@ function Transactions() {
                   >
                     Instant decision
                   </span>
+
                   <strong
                     style={{
                       display: "block",
@@ -840,6 +867,7 @@ function Transactions() {
                   >
                     {createdRisk.risk.decision}
                   </strong>
+
                   <span
                     style={{
                       display: "block",
@@ -848,7 +876,8 @@ function Transactions() {
                       fontSize: "10px",
                     }}
                   >
-                    {createdRisk.merchant} · {formatCurrency(
+                    {createdRisk.merchant} ·{" "}
+                    {formatCurrency(
                       createdRisk.amount,
                       createdRisk.currency,
                     )}
@@ -880,6 +909,7 @@ function Transactions() {
                     >
                       RISK SCORE
                     </span>
+
                     <strong
                       style={{
                         color: "#17201d",
@@ -1003,7 +1033,7 @@ function Transactions() {
 
           {isLoading ? (
             <div className="empty-state">
-              Loading transactionsâ€¦
+              Loading transactions…
             </div>
           ) : filteredTransactions.length ===
             0 ? (
