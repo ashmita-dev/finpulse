@@ -20,6 +20,10 @@ kafka_config = {
     "sasl_plain_password": KAFKA_SASL_PASSWORD,
     "api_version": (3, 7, 0),
     "value_serializer": lambda value: json.dumps(value).encode("utf-8"),
+    "acks": "all",
+    "retries": 3,
+    "max_block_ms": 10000,
+    "request_timeout_ms": 10000,
 }
 
 if KAFKA_SECURITY_PROTOCOL == "SASL_SSL":
