@@ -1,18 +1,23 @@
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
 
 from app.kafka.producer import publish_event
 from app.repositories.risk_actions import apply_risk_action
 from app.repositories.transactions import (
+    count_recent_transactions,
+    create_risk_assessment,
     create_transaction,
     get_risk_assessment_by_transaction_id,
     get_transaction_by_id,
     get_transactions,
     get_transactions_by_user,
+    get_user_transaction_amounts,
 )
+from app.risk.engine import calculate_risk
+from app.risk.rules import VELOCITY_WINDOW_SECONDS
 from app.schemas.transaction import (
     TransactionCreate,
     TransactionResponse,
@@ -48,21 +53,74 @@ def transaction_with_risk_to_response(result, risk):
     return response
 
 
+def publish_transaction_event(kafka_payload):
+    try:
+        publish_event(
+            "transaction.created",
+            kafka_payload,
+        )
+    except Exception:
+        pass
+
+
 @router.post(
     "/transactions",
-    response_model=TransactionResponse,
+    response_model=TransactionWithRiskResponse,
 )
 async def create_transaction_endpoint(
     transaction: TransactionCreate,
     request: Request,
+    background_tasks: BackgroundTasks,
 ):
     transaction = transaction.model_copy(
         update={"status": "pending"}
     )
 
+    recent_transaction_count = count_recent_transactions(
+        user_id=transaction.user_id,
+        timestamp=transaction.timestamp,
+        window_seconds=VELOCITY_WINDOW_SECONDS,
+    )
+
+    historical_amounts = get_user_transaction_amounts(
+        user_id=transaction.user_id,
+    )
+
+    risk = calculate_risk(
+        transaction,
+        recent_transaction_count=recent_transaction_count,
+        historical_amounts=historical_amounts,
+    )
+
+    status_map = {
+        "APPROVE": "completed",
+        "REVIEW": "review",
+        "BLOCK": "blocked",
+    }
+
+    final_status = status_map.get(
+        risk["decision"],
+        "review",
+    )
+
+    transaction = transaction.model_copy(
+        update={"status": final_status}
+    )
+
     result = create_transaction(transaction)
 
-    response = transaction_to_response(result)
+    create_risk_assessment(
+        transaction_id=result[0],
+        risk_score=risk["risk_score"],
+        risk_level=risk["risk_level"],
+        decision=risk["decision"],
+        reasons=risk["reasons"],
+    )
+
+    response = transaction_with_risk_to_response(
+        result,
+        risk,
+    )
 
     kafka_payload = jsonable_encoder(
         {
@@ -75,12 +133,12 @@ async def create_transaction_endpoint(
             "timestamp": response["timestamp"],
             "location": response["location"],
             "device_id": response["device_id"],
-            "status": "pending",
+            "status": final_status,
         }
     )
 
-    publish_event(
-        "transaction.created",
+    background_tasks.add_task(
+        publish_transaction_event,
         kafka_payload,
     )
 
