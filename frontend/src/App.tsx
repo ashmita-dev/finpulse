@@ -25,6 +25,11 @@ import {
 import "./App.css";
 
 import {
+  API_BASE_URL,
+  TRANSACTIONS_WS_URL,
+} from "./config";
+
+import {
   useAppDispatch,
   useAppSelector,
 } from "./app/hooks";
@@ -141,7 +146,7 @@ function Dashboard() {
 
   useEffect(() => {
     const socket = new WebSocket(
-      "ws://127.0.0.1:8000/ws/transactions",
+      TRANSACTIONS_WS_URL,
     );
 
     socket.onopen = () => {
@@ -958,7 +963,7 @@ function App() {
     const loadExistingNotifications = async () => {
       try {
         const response = await fetch(
-          "http://127.0.0.1:8000/api/v1/users/1/risk",
+          `${API_BASE_URL}/users/1/risk`,
         );
 
         if (!response.ok) {
@@ -1037,7 +1042,7 @@ function App() {
     void loadExistingNotifications();
 
     const socket = new WebSocket(
-      "ws://127.0.0.1:8000/ws/transactions",
+      TRANSACTIONS_WS_URL,
     );
 
     socket.onopen = () => {

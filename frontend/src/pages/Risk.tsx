@@ -6,6 +6,10 @@ import {
   ShieldAlert,
 } from "lucide-react";
 
+import {
+  API_BASE_URL,
+  TRANSACTIONS_WS_URL,
+} from "../config";
 import { getUserRiskTransactions } from "../services/api";
 import type { TransactionWithRisk } from "../types/transaction";
 
@@ -92,7 +96,7 @@ function Risk() {
 
   useEffect(() => {
     const socket = new WebSocket(
-      "ws://127.0.0.1:8000/ws/transactions",
+      TRANSACTIONS_WS_URL,
     );
 
     socket.onopen = () => {
@@ -194,7 +198,7 @@ function Risk() {
       setError(null);
 
       const response = await fetch(
-        `http://127.0.0.1:8000/api/v1/transactions/${selectedTransaction.id}/decision`,
+        `${API_BASE_URL}/transactions/${selectedTransaction.id}/decision`,
         {
           method: "PATCH",
           headers: {

@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 
 import { getUserTransactions } from "../services/api";
+import { TRANSACTIONS_WS_URL } from "../config";
 import type { Transaction } from "../types/transaction";
 
 function formatCurrency(
@@ -62,7 +63,7 @@ function Analytics() {
     void loadTransactions();
 
     const socket = new WebSocket(
-      "ws://127.0.0.1:8000/ws/transactions",
+      TRANSACTIONS_WS_URL,
     );
 
     socket.onmessage = (event) => {

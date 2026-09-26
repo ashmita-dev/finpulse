@@ -2,8 +2,7 @@ import type {
   Transaction,
   TransactionWithRisk,
 } from "../types/transaction";
-
-const API_BASE_URL = "/api/v1";
+import { API_BASE_URL } from "../config";
 
 async function request<T>(
   endpoint: string,
