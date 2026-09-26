@@ -1,4 +1,5 @@
 import json
+import ssl
 
 from kafka import KafkaProducer
 
@@ -10,7 +11,6 @@ from app.config import (
     KAFKA_SECURITY_PROTOCOL,
     KAFKA_SSL_CAFILE,
 )
-
 
 kafka_config = {
     "bootstrap_servers": KAFKA_BOOTSTRAP_SERVERS,
@@ -27,8 +27,10 @@ kafka_config = {
 }
 
 if KAFKA_SECURITY_PROTOCOL == "SASL_SSL":
-    kafka_config["ssl_cafile"] = KAFKA_SSL_CAFILE
-
+    if KAFKA_SSL_CAFILE:
+        kafka_config["ssl_cafile"] = KAFKA_SSL_CAFILE
+    else:
+        kafka_config["ssl_context"] = ssl.create_default_context()
 
 producer = KafkaProducer(**kafka_config)
 
@@ -41,7 +43,6 @@ def publish_event(
         topic,
         value=event,
     )
-
     future.get(timeout=10)
 
 
