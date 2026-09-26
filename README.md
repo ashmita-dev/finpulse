@@ -2,6 +2,14 @@
 
 ## Real-Time Financial Risk & Fraud Monitoring Platform
 
+### 🚀 Live Demo
+
+**[👉 Open FinPulse Live Demo](https://finpulse-frontend-0lj2.onrender.com)**
+
+> FinPulse is deployed and available for live testing. Submit transactions, observe real-time risk decisions, explore the transaction ledger, monitor risk activity, and view analytics directly from the deployed application.
+
+---
+
 FinPulse is a real-time financial risk monitoring platform designed to analyze transactions, evaluate fraud and risk signals, and deliver immediate decisions through an event-driven architecture.
 
 The platform combines a React and TypeScript dashboard with a Python FastAPI backend, PostgreSQL, Apache Kafka, WebSockets, Airflow, Docker, and automated testing.
@@ -130,59 +138,59 @@ PostgreSQL
 Nginx acts as the reverse proxy for the frontend application and backend API/WebSocket traffic.
 
 Architecture
-                    ┌──────────────────────┐
-                    │   React + TypeScript  │
-                    │    Redux Toolkit     │
-                    └──────────┬───────────┘
-                               │
-                               ▼
-                    ┌──────────────────────┐
-                    │    Nginx Reverse     │
-                    │        Proxy         │
-                    └──────────┬───────────┘
-                               │
-                               ▼
-                    ┌──────────────────────┐
-                    │    FastAPI Backend   │
-                    │       Python         │
-                    └───────┬───────┬──────┘
-                            │       │
-                            │       ▼
-                            │  ┌───────────────┐
-                            │  │  PostgreSQL   │
-                            │  │ Transactions  │
-                            │  │ Risk Results  │
-                            │  └───────────────┘
-                            │
-                            ▼
-                    ┌──────────────────────┐
-                    │       Apache Kafka    │
-                    │  Event-driven layer   │
-                    └──────────┬───────────┘
-                               │
-                               ▼
-                    ┌──────────────────────┐
-                    │      Risk Engine     │
-                    │   Python Processing   │
-                    └──────────┬───────────┘
-                               │
-                               ▼
-                    ┌──────────────────────┐
-                    │   Risk Assessment    │
-                    │ Score / Level /      │
-                    │ Decision / Reasons   │
-                    └──────────┬───────────┘
-                               │
-                               ▼
-                    ┌──────────────────────┐
-                    │      WebSockets      │
-                    │   Real-Time Events   │
-                    └──────────┬───────────┘
-                               │
-                               ▼
-                    ┌──────────────────────┐
-                    │   FinPulse Dashboard │
-                    └──────────────────────┘
+                     ┌──────────────────────┐
+                     │   React + TypeScript  │
+                     │    Redux Toolkit      │
+                     └──────────┬───────────┘
+                                │
+                                ▼
+                     ┌──────────────────────┐
+                     │    Nginx Reverse     │
+                     │        Proxy         │
+                     └──────────┬───────────┘
+                                │
+                                ▼
+                     ┌──────────────────────┐
+                     │    FastAPI Backend   │
+                     │       Python         │
+                     └───────┬───────┬──────┘
+                             │       │
+                             │       ▼
+                             │  ┌───────────────┐
+                             │  │  PostgreSQL   │
+                             │  │ Transactions  │
+                             │  │ Risk Results  │
+                             │  └───────────────┘
+                             │
+                             ▼
+                     ┌──────────────────────┐
+                     │     Apache Kafka      │
+                     │  Event-driven layer   │
+                     └──────────┬───────────┘
+                                │
+                                ▼
+                     ┌──────────────────────┐
+                     │      Risk Engine     │
+                     │   Python Processing   │
+                     └──────────┬───────────┘
+                                │
+                                ▼
+                     ┌──────────────────────┐
+                     │   Risk Assessment    │
+                     │ Score / Level /       │
+                     │ Decision / Reasons    │
+                     └──────────┬───────────┘
+                                │
+                                ▼
+                     ┌──────────────────────┐
+                     │      WebSockets      │
+                     │   Real-Time Events   │
+                     └──────────┬───────────┘
+                                │
+                                ▼
+                     ┌──────────────────────┐
+                     │   FinPulse Dashboard │
+                     └──────────────────────┘
 Technology Stack
 Frontend
 React
@@ -512,3 +520,7 @@ B.Tech Computer Science Engineering
 SVKM's NMIMS, Mukesh Patel School of Technology Management and Engineering
 
 GitHub: ashmita-dev
+
+🚀 Try FinPulse
+
+Open the Live Application →
